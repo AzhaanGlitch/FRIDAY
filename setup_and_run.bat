@@ -40,18 +40,24 @@ echo [4/4] Starting FRIDAY Desktop Application Interface...
 cd /d %PROJECT_ROOT%\desktop
 
 where link.exe >nul 2>nul
-if errorlevel 1 (
-    if exist "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\VC\Auxiliary\Build\vcvars64.bat" (
-        echo [Info] Activating Visual Studio C++ Compiler environment...
-        call "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\VC\Auxiliary\Build\vcvars64.bat" >nul
-    ) else if exist "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat" (
-        echo [Info] Activating Visual Studio C++ Compiler environment...
-        call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat" >nul
-    ) else if exist "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat" (
-        echo [Info] Activating Visual Studio C++ Compiler environment...
-        call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat" >nul
-    )
+if %errorlevel%==0 goto LINKER_READY
+
+if exist "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\VC\Auxiliary\Build\vcvars64.bat" (
+    echo [Info] Activating Visual Studio C++ Compiler environment...
+    call "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\VC\Auxiliary\Build\vcvars64.bat" >nul
 )
+
+if exist "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat" (
+    echo [Info] Activating Visual Studio C++ Compiler environment...
+    call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat" >nul
+)
+
+if exist "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat" (
+    echo [Info] Activating Visual Studio C++ Compiler environment...
+    call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat" >nul
+)
+
+:LINKER_READY
 
 where link.exe >nul 2>nul
 if %errorlevel%==0 (
