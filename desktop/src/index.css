@@ -1,0 +1,76 @@
+:root {
+  --bg-primary: #0a0c14;
+  --bg-card: rgba(18, 22, 36, 0.7);
+  --cyan-glow: #00f2ff;
+  --cyan-glow-dim: rgba(0, 242, 255, 0.15);
+  --blue-accent: #3b82f6;
+  --text-main: #f3f4f6;
+  --text-muted: #9ca3af;
+  --border-glow: rgba(0, 242, 255, 0.25);
+  --font-family: 'Outfit', sans-serif;
+  --font-heading: 'Space Grotesk', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-main);
+  font-family: var(--font-family);
+  overflow-x: hidden;
+  height: 100vh;
+}
+
+/* Glassmorphism utility */
+.glass-panel {
+  background: var(--bg-card);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-glow);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5), 0 0 15px var(--cyan-glow-dim);
+  border-radius: 16px;
+}
+
+/* Futuristic Glow Effects */
+.cyan-text-glow {
+  text-shadow: 0 0 10px var(--cyan-glow), 0 0 20px var(--cyan-glow);
+}
+
+/* Pulse Animation for Voice Assistant */
+@keyframes orbPulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 30px #00f2ff, inset 0 0 30px #00f2ff;
+  }
+  50% {
+    transform: scale(1.08);
+    box-shadow: 0 0 60px #00f2ff, inset 0 0 50px #3b82f6;
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 30px #00f2ff, inset 0 0 30px #00f2ff;
+  }
+}
+
+.voice-orb {
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #00f2ff 0%, #1e3a8a 70%, #0a0c14 100%);
+  animation: orbPulse 3s infinite ease-in-out;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.voice-orb.listening {
+  animation: orbPulse 1.2s infinite ease-in-out;
+  background: radial-gradient(circle, #00f2ff 0%, #3b82f6 50%, #6366f1 100%);
+}
