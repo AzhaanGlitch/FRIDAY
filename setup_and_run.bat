@@ -35,9 +35,9 @@ start "FRIDAY Backend Server" cmd /k "set PYTHONPATH=%PROJECT_ROOT% && call back
 
 timeout /t 3 /nobreak >nul
 
-:: 4. Launch Desktop Frontend
-echo [4/4] Starting FRIDAY Desktop UI...
+:: 4. Launch Desktop Application (Tauri)
+echo [4/4] Starting FRIDAY Desktop Application (Tauri)...
 cd /d %PROJECT_ROOT%\desktop
-call npm run dev
+call npm run desktop:dev
 
 pause
