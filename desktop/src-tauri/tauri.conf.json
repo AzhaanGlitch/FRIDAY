@@ -60,7 +60,9 @@
         "resizable": true,
         "title": "F.R.I.D.A.Y. AI Assistant",
         "width": 1080,
-        "center": true
+        "center": true,
+        "visible": true,
+        "focus": true
       }
     ]
   }
