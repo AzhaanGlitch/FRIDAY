@@ -6,13 +6,15 @@ Cross-Platform Voice-Controlled AI Computer Assistant inspired by Iron Man.
 
 ```
 FRIDAY/
-├── desktop/                # Tauri & React Frontend Interface
+├── desktop/                # Tauri & React Desktop Application
 │   ├── src/                # React / TypeScript source code
-│   │   ├── components/     # UI components
-│   │   ├── services/       # WebSocket & REST service connectors
-│   │   ├── App.tsx         # Main UI console with glassmorphism & voice orb
+│   │   ├── App.tsx         # Desktop UI console with voice orb & Tauri IPC
 │   │   ├── main.tsx        # React entry point
 │   │   └── index.css       # Core theme tokens and animations
+│   ├── src-tauri/          # Rust Native Desktop Shell & Tauri Config
+│   │   ├── src/main.rs     # Rust desktop process & native handlers
+│   │   ├── Cargo.toml      # Rust package manifest
+│   │   └── tauri.conf.json # Tauri window & app configuration
 │   ├── index.html
 │   ├── package.json
 │   └── vite.config.ts
@@ -20,37 +22,42 @@ FRIDAY/
 │   ├── api/                # FastAPI application & WebSockets
 │   │   └── main.py
 │   ├── voice/              # Voice subsystem
-│   │   ├── stt.py          # Faster-Whisper speech recognition
-│   │   └── tts.py          # macOS native & pyttsx3 speech synthesis
+│   │   ├── stt.py          # Speech recognition
+│   │   └── tts.py          # Speech synthesis
 │   ├── agents/             # Intent parser & LLM orchestrator
 │   │   └── llm_orchestrator.py
 │   ├── automation/         # System automation adapters
-│   │   ├── mac_automation.py # macOS native open, osascript, screenshot
-│   │   └── system_automation.py # Unified cross-platform automation router
+│   │   ├── mac_automation.py
+│   │   └── system_automation.py
 │   ├── config/             # Configuration & environment settings
-│   │   └── config.py
 │   ├── requirements.txt
-│   └── run_backend.py      # Server launch entry point
+│   └── run_backend.py      # Backend launch script
 ├── docs/                   # Documentation and project blueprints
 └── tests/                  # Backend unit and integration tests
 ```
 
-## Running the Phase 1 Core MVP
+## Running the Phase 1 Core MVP (Tauri Desktop App)
 
-### 1. Start the Backend API Server
+### Quick Start (Automated Script)
+- **Windows**: Double click or run `setup_and_run.bat`
+- **macOS / Linux**: Run `./setup_and_run.sh`
+
+### Manual Launch
+
+#### 1. Start the Backend API Server
 ```bash
 cd backend
 python3 -m venv venv
-source venv/bin/activate
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 python3 run_backend.py
 ```
 The backend server will run on `http://localhost:8000`.
 
-### 2. Start the Desktop Frontend
+#### 2. Start the Tauri Desktop Application
 ```bash
 cd desktop
 npm install
-npm run dev
+npm run desktop:dev
 ```
-The React desktop interface will open on `http://localhost:3000`.
+This launches the native Tauri desktop window wrapping the FRIDAY AI Assistant interface.
