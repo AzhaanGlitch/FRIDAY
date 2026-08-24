@@ -35,9 +35,26 @@ start "FRIDAY Backend Server" cmd /k "set PYTHONPATH=%PROJECT_ROOT% && call back
 
 timeout /t 3 /nobreak >nul
 
-:: 4. Launch Desktop Application (Tauri)
-echo [4/4] Starting FRIDAY Desktop Application (Tauri)...
+:: 4. Launch Desktop Application (Tauri or Web Preview fallback)
+echo [4/4] Starting FRIDAY Desktop Application Interface...
 cd /d %PROJECT_ROOT%\desktop
-call npm run desktop:dev
+
+where link.exe >nul 2>nul
+if %errorlevel%==0 (
+    echo [Info] C++ Linker detected. Launching native Tauri Desktop App...
+    call npm run desktop:dev
+) else (
+    echo.
+    echo ========================================================================
+    echo [NOTICE] C++ Build Tools (link.exe) not found on your Windows system.
+    echo To compile & run the native Tauri Desktop window, install:
+    echo "Desktop development with C++" from Visual Studio Build Tools:
+    echo https://visualstudio.microsoft.com/visual-cpp-build-tools/
+    echo.
+    echo Launching FRIDAY Web Interface on http://localhost:3000 in the meantime...
+    echo ========================================================================
+    echo.
+    call npm run dev
+)
 
 pause
