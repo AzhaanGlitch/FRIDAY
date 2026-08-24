@@ -1,5 +1,6 @@
 import sys
 import os
+import threading
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -44,7 +45,8 @@ def execute_command(req: CommandRequest):
     response = LLMOrchestrator.process_command(req.command)
     
     if req.speak_response and response.get("text_response"):
-        VoiceTTS.speak(response["text_response"])
+        # Run TTS in background thread so REST response is not blocked
+        threading.Thread(target=VoiceTTS.speak, args=(response["text_response"],), daemon=True).start()
         
     return response
 
@@ -68,15 +70,18 @@ async def websocket_endpoint(websocket: WebSocket):
                 
                 res = LLMOrchestrator.process_command(text_input)
                 
-                if speak and res.get("text_response"):
-                    VoiceTTS.speak(res["text_response"])
-                    
+                # Send response to UI immediately (never block on TTS)
                 await websocket.send_json({
                     "type": "response",
                     "content": res.get("text_response", ""),
                     "action": res.get("action_executed", "none"),
                     "result": res.get("result", {})
                 })
+
+                # Run TTS in background thread AFTER sending response
+                if speak and res.get("text_response"):
+                    threading.Thread(target=VoiceTTS.speak, args=(res["text_response"],), daemon=True).start()
                 
     except WebSocketDisconnect:
         print("[WebSocket] Client disconnected")
+
