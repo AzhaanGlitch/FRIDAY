@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, Send, Cpu, Monitor, Volume2, ShieldCheck, Terminal } from 'lucide-react';
+import { Mic, Send, Cpu, Monitor, Volume2, ShieldCheck, Terminal, AppWindow } from 'lucide-react';
+import { invoke } from '@tauri-apps/api/tauri';
 
 interface Message {
   id: string;
@@ -10,15 +11,25 @@ interface Message {
 
 export const App: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([
-    { id: '1', sender: 'friday', text: 'FRIDAY Online. How can I assist your system today?' }
+    { id: '1', sender: 'friday', text: 'F.R.I.D.A.Y. Desktop Shell Online. How can I assist your system today?' }
   ]);
   const [input, setInput] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
+  const [tauriStatus, setTauriStatus] = useState<string>('Initializing Desktop Layer...');
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    // Connect WebSocket
+    // Check Tauri Native Integration
+    try {
+      invoke<string>('get_system_status')
+        .then(status => setTauriStatus(status))
+        .catch(() => setTauriStatus('Running in Web Preview Mode'));
+    } catch {
+      setTauriStatus('Running in Web Preview Mode');
+    }
+
+    // Connect WebSocket to Python FastAPI AI Core
     const ws = new WebSocket('ws://localhost:8000/ws');
     wsRef.current = ws;
 
@@ -80,6 +91,17 @@ export const App: React.FC = () => {
               action: data.action_executed
             }
           ]);
+        })
+        .catch(err => {
+          console.error('API Error', err);
+          setMessages(prev => [
+            ...prev,
+            {
+              id: Date.now().toString(),
+              sender: 'friday',
+              text: 'Unable to communicate with FRIDAY Python Core API (http://localhost:8000). Please ensure backend is running.'
+            }
+          ]);
         });
     }
 
@@ -88,7 +110,6 @@ export const App: React.FC = () => {
 
   const toggleVoice = () => {
     setIsListening(prev => !prev);
-    // In MVP, voice mic simulation triggers command
     if (!isListening) {
       setTimeout(() => {
         setIsListening(false);
@@ -104,11 +125,15 @@ export const App: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <Cpu color="#00f2ff" size={28} />
           <div>
-            <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: '20px', letterSpacing: '1px' }}>F.R.I.D.A.Y.</h1>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>AI Operating System Layer v0.1</p>
+            <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: '20px', letterSpacing: '1px' }}>F.R.I.D.A.Y. Desktop</h1>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Tauri Native Desktop Architecture Phase-1 MVP</p>
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.05)', padding: '4px 10px', borderRadius: '6px' }}>
+            <AppWindow size={14} color="#00f2ff" />
+            <span>{tauriStatus}</span>
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
             <span style={{
               width: '10px',
@@ -151,7 +176,7 @@ export const App: React.FC = () => {
         <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', padding: '20px', minHeight: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: '16px' }}>
             <Terminal size={18} color="#00f2ff" />
-            <span style={{ fontWeight: 600, fontSize: '14px' }}>System Command Log</span>
+            <span style={{ fontWeight: 600, fontSize: '14px' }}>Desktop System Command Log</span>
           </div>
 
           <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', paddingRight: '8px' }}>
@@ -219,3 +244,4 @@ export const App: React.FC = () => {
     </div>
   );
 };
+
