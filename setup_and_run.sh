@@ -38,10 +38,10 @@ BACKEND_PID=$!
 
 sleep 2
 
-# 4. Launch Desktop Frontend
-echo "[4/4] Starting FRIDAY Desktop UI..."
+# 4. Launch Desktop Application (Tauri)
+echo "[4/4] Starting FRIDAY Desktop Application (Tauri)..."
 cd "$PROJECT_ROOT/desktop"
-npm run dev
+npm run desktop:dev
 
 # Cleanup on exit
 kill $BACKEND_PID
