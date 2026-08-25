@@ -3,8 +3,10 @@ import re
 import requests
 from backend.config.config import settings
 from backend.automation.system_automation import SystemAutomation
+from backend.memory.database import MemoryDatabase
 
 class LLMOrchestrator:
+
     """Orchestrates natural language intent parsing and response generation."""
 
     SYSTEM_PROMPT = """You are FRIDAY, an intelligent computer AI assistant.
@@ -35,17 +37,26 @@ Supported actions:
         """Process natural language user command."""
         text_lower = user_text.lower().strip()
 
+        # Clear History Intent
+        if "clear history" in text_lower or "forget history" in text_lower or "delete conversation" in text_lower:
+            res = MemoryDatabase.clear_history()
+            return {"text_response": "Cleared all conversation history from local database.", "action_executed": "clear_history", "result": res}
+
         # Multi-Step Workflow: Coding Mode
         if "coding mode" in text_lower or "start coding" in text_lower:
             res1 = SystemAutomation.execute_intent("open_app", {"app_name": "Visual Studio Code"})
             res2 = SystemAutomation.execute_intent("open_app", {"app_name": "Terminal"})
             res3 = SystemAutomation.execute_intent("open_url", {"url": "github.com"})
             res4 = SystemAutomation.execute_intent("set_volume", {"level": 35})
+            output_msg = "Initiating coding mode. Opened VS Code, Terminal, GitHub, and set volume to 35%."
+            MemoryDatabase.save_message("user", user_text)
+            MemoryDatabase.save_message("friday", output_msg, action="coding_mode")
             return {
-                "text_response": "Initiating coding mode. Opened VS Code, Terminal, GitHub, and set volume to 35%.",
+                "text_response": output_msg,
                 "action_executed": "coding_mode",
                 "result": {"vscode": res1, "terminal": res2, "browser": res3, "volume": res4}
             }
+
 
         # Close App
         elif text_lower.startswith("close ") or text_lower.startswith("quit ") or text_lower.startswith("exit "):
@@ -175,6 +186,7 @@ Supported actions:
             }
 
         # Fallback to Ollama or Default Conversational AI
+        text_resp = f"I heard: '{user_text}'. All FRIDAY automation drivers online."
         try:
             if settings.LLM_PROVIDER == "ollama":
                 res = requests.post(
@@ -184,11 +196,15 @@ Supported actions:
                 )
                 if res.status_code == 200:
                     data = res.json()
-                    return {"text_response": data.get("response", "I am online and ready."), "action_executed": "none"}
+                    text_resp = data.get("response", "I am online and ready.")
         except Exception:
             pass
 
+        MemoryDatabase.save_message("user", user_text)
+        MemoryDatabase.save_message("friday", text_resp, action="none")
+
         return {
-            "text_response": f"I heard: '{user_text}'. All FRIDAY automation drivers online.",
+            "text_response": text_resp,
             "action_executed": "none"
         }
+

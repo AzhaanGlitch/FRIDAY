@@ -36,9 +36,20 @@ export const App: React.FC = () => {
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
+    // Fetch stored persistent conversation history from SQLite
+    fetch('http://localhost:8000/api/history')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.history && data.history.length > 0) {
+          setMessages(data.history);
+        }
+      })
+      .catch(() => {});
+
     // Connect WebSocket
     const ws = new WebSocket('ws://localhost:8000/ws');
     wsRef.current = ws;
+
 
     ws.onopen = () => setIsConnected(true);
     ws.onmessage = (event) => {
@@ -199,10 +210,22 @@ export const App: React.FC = () => {
 
         {/* Right Side: Command Log Console */}
         <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', padding: '16px', minHeight: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingBottom: '10px', borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: '12px' }}>
-            <Monitor size={16} color="#00f2ff" />
-            <span style={{ fontWeight: 600, fontSize: '13px' }}>FRIDAY Operating Console</span>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '10px', borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Monitor size={16} color="#00f2ff" />
+              <span style={{ fontWeight: 600, fontSize: '13px' }}>FRIDAY Operating Console</span>
+            </div>
+            <button
+              onClick={() => {
+                fetch('http://localhost:8000/api/clear-history', { method: 'POST' })
+                  .then(() => setMessages([{ id: Date.now().toString(), sender: 'friday', text: 'Cleared conversation history.' }]));
+              }}
+              style={{ background: 'transparent', border: '1px solid rgba(239, 68, 68, 0.4)', color: '#ef4444', padding: '3px 8px', borderRadius: '4px', fontSize: '10px', cursor: 'pointer' }}
+            >
+              Clear Memory
+            </button>
           </div>
+
 
           <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px', paddingRight: '6px' }}>
             {messages.map(msg => (

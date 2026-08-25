@@ -46,7 +46,18 @@ def get_system_status():
     """Return live system telemetry (CPU, RAM, Disk, Battery)."""
     return SystemMonitor.get_metrics()
 
+@app.get("/api/history")
+def get_history(limit: int = 50):
+    """Retrieve recent conversation history from SQLite database."""
+    return {"success": True, "history": MemoryDatabase.get_recent_history(limit=limit)}
+
+@app.post("/api/clear-history")
+def clear_history():
+    """Clear stored conversation history."""
+    return MemoryDatabase.clear_history()
+
 @app.post("/api/listen-mic")
+
 def listen_microphone(duration: int = 4):
     """Record live mic audio for X seconds, transcribe to command, and execute."""
     stt_res = stt_engine.record_and_transcribe(duration_seconds=duration)
