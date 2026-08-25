@@ -1,15 +1,34 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/schema.json",
-  "productName": "FRIDAY AI Assistant",
-  "version": "0.1.0",
-  "identifier": "com.friday.assistant",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "devUrl": "http://localhost:3000",
+    "devPath": "http://localhost:3000",
     "beforeBuildCommand": "npm run build",
-    "frontendDist": "../dist"
+    "distDir": "../dist"
   },
-  "app": {
+  "package": {
+    "productName": "FRIDAY AI Assistant",
+    "version": "0.1.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": true
+    },
+    "bundle": {
+      "active": true,
+      "targets": "all",
+      "identifier": "com.friday.assistant",
+      "icon": [
+        "icons/32x32.png",
+        "icons/128x128.png",
+        "icons/128x128@2x.png",
+        "icons/icon.icns",
+        "icons/icon.ico"
+      ]
+    },
+    "security": {
+      "csp": null
+    },
     "windows": [
       {
         "title": "F.R.I.D.A.Y. AI Assistant",
@@ -21,20 +40,6 @@
         "visible": true,
         "focus": true
       }
-    ],
-    "security": {
-      "csp": null
-    }
-  },
-  "bundle": {
-    "active": true,
-    "targets": "all",
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
     ]
   }
 }
