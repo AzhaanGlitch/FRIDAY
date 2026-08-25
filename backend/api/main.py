@@ -50,10 +50,11 @@ def get_system_status():
 
 @app.get("/api/wait-wakeword")
 def wait_for_wakeword(timeout: int = 15):
-    """Wait for 2 Clap Sound + FRIDAY wake word trigger."""
-    from backend.voice.wakeword import ClapAndWakeWordDetector
-    woken = ClapAndWakeWordDetector.detect_claps_and_wakeword(timeout_seconds=timeout)
+    """Wait for 'FRIDAY' wake word trigger."""
+    from backend.voice.wakeword import WakeWordDetector
+    woken = WakeWordDetector.detect_wakeword(timeout_seconds=timeout)
     return {"success": woken, "woken": woken}
+
 
 @app.get("/api/history")
 

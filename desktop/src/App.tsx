@@ -27,9 +27,10 @@ export const App: React.FC = () => {
   const runVoiceLoop = async () => {
     if (!isRunningRef.current) return;
 
-    // Step 1: Standby / Awaiting 2 Clap Sound + FRIDAY Wake Word
+    // Step 1: Standby / Awaiting 'FRIDAY' Wake Word
     setVoiceState('wakeword');
-    setStatusText('STANDBY MODE: Clap 2 times + say "FRIDAY"');
+    setStatusText('STANDBY MODE: Say "FRIDAY" to Wake Up');
+
 
     try {
       const wakeRes = await fetch('http://localhost:8000/api/wait-wakeword?timeout=15').then(r => r.json());
