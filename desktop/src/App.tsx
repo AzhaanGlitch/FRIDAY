@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, Send, Cpu, Monitor, Volume2, ShieldCheck, Terminal, AppWindow } from 'lucide-react';
-import { invoke } from '@tauri-apps/api/tauri';
+import { Mic, Send, Cpu, Monitor, Volume2, ShieldCheck, Terminal, HardDrive, BatteryCharging, Activity } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -9,34 +8,39 @@ interface Message {
   action?: string;
 }
 
+interface Telemetry {
+  cpu_percent: number;
+  ram_percent: number;
+  ram_used_gb: number;
+  ram_total_gb: number;
+  disk_percent: number;
+  battery: { percent: number; power_plugged: boolean };
+}
+
 export const App: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([
-    { id: '1', sender: 'friday', text: 'F.R.I.D.A.Y. Desktop Shell Online. How can I assist your system today?' }
+    { id: '1', sender: 'friday', text: 'FRIDAY Online. How can I assist your system today?' }
   ]);
   const [input, setInput] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
-  const [tauriStatus, setTauriStatus] = useState<string>('Initializing Desktop Layer...');
+  const [telemetry, setTelemetry] = useState<Telemetry>({
+    cpu_percent: 0,
+    ram_percent: 0,
+    ram_used_gb: 0,
+    ram_total_gb: 0,
+    disk_percent: 0,
+    battery: { percent: 100, power_plugged: true }
+  });
+
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    // Check Tauri Native Integration
-    try {
-      invoke<string>('get_system_status')
-        .then(status => setTauriStatus(status))
-        .catch(() => setTauriStatus('Running in Web Preview Mode'));
-    } catch {
-      setTauriStatus('Running in Web Preview Mode');
-    }
-
-    // Connect WebSocket to Python FastAPI AI Core
+    // Connect WebSocket
     const ws = new WebSocket('ws://localhost:8000/ws');
     wsRef.current = ws;
 
-    ws.onopen = () => {
-      setIsConnected(true);
-    };
-
+    ws.onopen = () => setIsConnected(true);
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
@@ -55,26 +59,34 @@ export const App: React.FC = () => {
         console.error('WS parse error', err);
       }
     };
+    ws.onclose = () => setIsConnected(false);
 
-    ws.onclose = () => {
-      setIsConnected(false);
-    };
+    // Stream System Telemetry every 3 seconds
+    const interval = setInterval(() => {
+      fetch('http://localhost:8000/api/system-status')
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.metrics) {
+            setTelemetry(data.metrics);
+          }
+        })
+        .catch(() => {});
+    }, 3000);
 
     return () => {
       ws.close();
+      clearInterval(interval);
     };
   }, []);
 
   const handleSend = () => {
     if (!input.trim()) return;
-
     const userMsg: Message = { id: Date.now().toString(), sender: 'user', text: input };
     setMessages(prev => [...prev, userMsg]);
 
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'text', content: input, speak: true }));
     } else {
-      // REST API Fallback
       fetch('http://localhost:8000/api/command', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -91,110 +103,123 @@ export const App: React.FC = () => {
               action: data.action_executed
             }
           ]);
-        })
-        .catch(err => {
-          console.error('API Error', err);
-          setMessages(prev => [
-            ...prev,
-            {
-              id: Date.now().toString(),
-              sender: 'friday',
-              text: 'Unable to communicate with FRIDAY Python Core API (http://localhost:8000). Please ensure backend is running.'
-            }
-          ]);
         });
     }
-
     setInput('');
   };
 
-  const toggleVoice = () => {
-    setIsListening(prev => !prev);
-    if (!isListening) {
-      setTimeout(() => {
+  const triggerMicListen = () => {
+    setIsListening(true);
+    fetch('http://localhost:8000/api/listen-mic?duration=4', { method: 'POST' })
+      .then(res => res.json())
+      .then(data => {
         setIsListening(false);
-        setInput("Open Spotify");
-      }, 2500);
-    }
+        if (data.success && data.transcribed_command) {
+          setMessages(prev => [
+            ...prev,
+            { id: Date.now().toString(), sender: 'user', text: data.transcribed_command },
+            {
+              id: (Date.now() + 1).toString(),
+              sender: 'friday',
+              text: data.response.text_response,
+              action: data.response.action_executed
+            }
+          ]);
+        } else {
+          setMessages(prev => [
+            ...prev,
+            { id: Date.now().toString(), sender: 'friday', text: `Mic error: ${data.error || 'No speech detected'}` }
+          ]);
+        }
+      })
+      .catch(() => setIsListening(false));
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', padding: '24px', gap: '20px' }}>
-      {/* Top Header */}
-      <header className="glass-panel" style={{ padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', padding: '20px', gap: '16px' }}>
+      {/* Top Header & Telemetry Bar */}
+      <header className="glass-panel" style={{ padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Cpu color="#00f2ff" size={28} />
+          <Cpu color="#00f2ff" size={26} />
           <div>
-            <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: '20px', letterSpacing: '1px' }}>F.R.I.D.A.Y. Desktop</h1>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Tauri Native Desktop Architecture Phase-1 MVP</p>
+            <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: '18px', letterSpacing: '1px' }}>F.R.I.D.A.Y.</h1>
+            <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>System Monitoring & AI OS Layer</p>
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.05)', padding: '4px 10px', borderRadius: '6px' }}>
-            <AppWindow size={14} color="#00f2ff" />
-            <span>{tauriStatus}</span>
+
+        {/* Live Telemetry Metrics */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px', fontSize: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Activity size={14} color="#00f2ff" />
+            <span>CPU: <strong>{telemetry.cpu_percent}%</strong></span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <HardDrive size={14} color="#3b82f6" />
+            <span>RAM: <strong>{telemetry.ram_percent}%</strong> ({telemetry.ram_used_gb}GB)</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <BatteryCharging size={14} color="#10b981" />
+            <span>Battery: <strong>{telemetry.battery.percent}%</strong></span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '10px' }}>
             <span style={{
-              width: '10px',
-              height: '10px',
-              borderRadius: '50%',
+              width: '8px', height: '8px', borderRadius: '50%',
               backgroundColor: isConnected ? '#10b981' : '#ef4444',
               boxShadow: isConnected ? '0 0 8px #10b981' : 'none'
             }} />
-            {isConnected ? 'Core Connected' : 'Disconnected'}
+            {isConnected ? 'Online' : 'Offline'}
           </div>
         </div>
       </header>
 
-      {/* Main Content Body */}
-      <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: '20px', flex: 1, minHeight: 0 }}>
-        {/* Left Side: Voice Orb & System Quick Controls */}
-        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px', gap: '24px' }}>
-          <div className={`voice-orb ${isListening ? 'listening' : ''}`} onClick={toggleVoice}>
-            <Mic color="#ffffff" size={40} />
+      {/* Main Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: '16px', flex: 1, minHeight: 0 }}>
+        {/* Left Side: Voice Orb & Quick Actions */}
+        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px', gap: '20px' }}>
+          <div className={`voice-orb ${isListening ? 'listening' : ''}`} onClick={triggerMicListen}>
+            <Mic color="#ffffff" size={36} />
           </div>
-          <p style={{ fontSize: '14px', color: 'var(--text-muted)', textAlign: 'center' }}>
-            {isListening ? 'Listening for voice commands...' : 'Click orb or speak "Hey FRIDAY"'}
+          <p style={{ fontSize: '13px', color: 'var(--text-muted)', textAlign: 'center' }}>
+            {isListening ? 'Recording mic... Speak now' : 'Click Orb to start Voice Recording'}
           </p>
 
-          <div style={{ width: '100%', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <span style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>Quick Intents</span>
-            <button className="glass-panel" style={{ padding: '10px 14px', color: '#fff', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }} onClick={() => { setInput("Open Spotify"); }}>
-              <Monitor size={16} color="#00f2ff" /> Open Spotify
+          <div style={{ width: '100%', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>Quick Intents</span>
+            <button className="glass-panel" style={{ padding: '8px 12px', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' }} onClick={() => { setInput("start coding mode"); }}>
+              <Terminal size={14} color="#00f2ff" /> Start Coding Mode
             </button>
-            <button className="glass-panel" style={{ padding: '10px 14px', color: '#fff', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }} onClick={() => { setInput("Set volume to 40"); }}>
-              <Volume2 size={16} color="#00f2ff" /> Set Volume to 40%
+            <button className="glass-panel" style={{ padding: '8px 12px', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' }} onClick={() => { setInput("Set volume to 40"); }}>
+              <Volume2 size={14} color="#00f2ff" /> Set Volume to 40%
             </button>
-            <button className="glass-panel" style={{ padding: '10px 14px', color: '#fff', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }} onClick={() => { setInput("Take a screenshot"); }}>
-              <ShieldCheck size={16} color="#00f2ff" /> Capture Screen
+            <button className="glass-panel" style={{ padding: '8px 12px', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' }} onClick={() => { setInput("Take a screenshot"); }}>
+              <ShieldCheck size={14} color="#00f2ff" /> Capture Screen
             </button>
           </div>
         </div>
 
-        {/* Right Side: Conversation Console */}
-        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', padding: '20px', minHeight: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: '16px' }}>
-            <Terminal size={18} color="#00f2ff" />
-            <span style={{ fontWeight: 600, fontSize: '14px' }}>Desktop System Command Log</span>
+        {/* Right Side: Command Log Console */}
+        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', padding: '16px', minHeight: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingBottom: '10px', borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: '12px' }}>
+            <Monitor size={16} color="#00f2ff" />
+            <span style={{ fontWeight: 600, fontSize: '13px' }}>FRIDAY Operating Console</span>
           </div>
 
-          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', paddingRight: '8px' }}>
+          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px', paddingRight: '6px' }}>
             {messages.map(msg => (
               <div key={msg.id} style={{
                 alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start',
                 maxWidth: '80%',
-                padding: '12px 16px',
-                borderRadius: '12px',
+                padding: '10px 14px',
+                borderRadius: '10px',
                 background: msg.sender === 'user' ? 'rgba(59, 130, 246, 0.25)' : 'rgba(0, 242, 255, 0.08)',
                 border: msg.sender === 'user' ? '1px solid rgba(59, 130, 246, 0.5)' : '1px solid rgba(0, 242, 255, 0.2)'
               }}>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '3px' }}>
                   {msg.sender === 'user' ? 'User' : 'FRIDAY'}
                 </div>
-                <div style={{ fontSize: '14px', lineHeight: '1.5' }}>{msg.text}</div>
+                <div style={{ fontSize: '13px', lineHeight: '1.4' }}>{msg.text}</div>
                 {msg.action && (
-                  <div style={{ marginTop: '6px', fontSize: '11px', color: '#00f2ff', background: 'rgba(0,0,0,0.3)', padding: '2px 8px', borderRadius: '4px', display: 'inline-block' }}>
+                  <div style={{ marginTop: '5px', fontSize: '10px', color: '#00f2ff', background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: '4px', display: 'inline-block' }}>
                     Action: {msg.action}
                   </div>
                 )}
@@ -203,10 +228,10 @@ export const App: React.FC = () => {
           </div>
 
           {/* Input Bar */}
-          <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+          <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
             <input
               type="text"
-              placeholder="Type command (e.g. 'Open Spotify', 'Take a screenshot')..."
+              placeholder="Type command or click Voice Orb to speak..."
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSend()}
@@ -214,11 +239,12 @@ export const App: React.FC = () => {
                 flex: 1,
                 background: 'rgba(0,0,0,0.4)',
                 border: '1px solid var(--border-glow)',
-                borderRadius: '10px',
-                padding: '12px 16px',
+                borderRadius: '8px',
+                padding: '10px 14px',
                 color: '#fff',
                 outline: 'none',
-                fontFamily: 'inherit'
+                fontFamily: 'inherit',
+                fontSize: '13px'
               }}
             />
             <button
@@ -226,8 +252,8 @@ export const App: React.FC = () => {
               style={{
                 background: '#00f2ff',
                 border: 'none',
-                borderRadius: '10px',
-                padding: '0 20px',
+                borderRadius: '8px',
+                padding: '0 16px',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
@@ -236,7 +262,7 @@ export const App: React.FC = () => {
                 fontWeight: 'bold'
               }}
             >
-              <Send size={18} />
+              <Send size={16} />
             </button>
           </div>
         </div>
@@ -244,4 +270,3 @@ export const App: React.FC = () => {
     </div>
   );
 };
-

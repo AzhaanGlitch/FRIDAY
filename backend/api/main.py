@@ -11,6 +11,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 from backend.config.config import settings
 from backend.agents.llm_orchestrator import LLMOrchestrator
 from backend.voice.tts import VoiceTTS
+from backend.voice.stt import stt_engine
+from backend.automation.system_monitor import SystemMonitor
 
 app = FastAPI(title=settings.APP_NAME, version=settings.VERSION)
 
@@ -38,6 +40,30 @@ def root():
 @app.get("/api/health")
 def health_check():
     return {"status": "healthy", "service": "FRIDAY Core API"}
+
+@app.get("/api/system-status")
+def get_system_status():
+    """Return live system telemetry (CPU, RAM, Disk, Battery)."""
+    return SystemMonitor.get_metrics()
+
+@app.post("/api/listen-mic")
+def listen_microphone(duration: int = 4):
+    """Record live mic audio for X seconds, transcribe to command, and execute."""
+    stt_res = stt_engine.record_and_transcribe(duration_seconds=duration)
+    if not stt_res.get("success"):
+        return {"success": False, "error": stt_res.get("error", "Failed to capture mic audio")}
+    
+    user_command = stt_res.get("text", "")
+    response = LLMOrchestrator.process_command(user_command)
+    if response.get("text_response"):
+        VoiceTTS.speak(response["text_response"])
+        
+    return {
+        "success": True,
+        "transcribed_command": user_command,
+        "response": response
+    }
+
 
 @app.post("/api/command")
 def execute_command(req: CommandRequest):
