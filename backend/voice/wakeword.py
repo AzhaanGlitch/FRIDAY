@@ -1,54 +1,63 @@
+import sounddevice as sd
+import scipy.io.wavfile as wav
 import speech_recognition as sr
+import tempfile
 import time
+import os
+import numpy as np
 
 class WakeWordDetector:
-    """Detects 'FRIDAY' wake word to activate active voice microphone loop safely without C-extension memory leaks."""
+    """Detects 'FRIDAY' wake word using sounddevice (no PyAudio) to prevent SIGSEGV crashes."""
 
-    _shared_microphone = None
+    SAMPLE_RATE = 16000
 
     @classmethod
-    def get_microphone(cls):
-        if cls._shared_microphone is None:
-            try:
-                cls._shared_microphone = sr.Microphone()
-            except Exception as e:
-                print(f"[WakeWord Mic Init Error]: {e}")
-                return None
-        return cls._shared_microphone
+    def _record_chunk(cls, duration: float = 2.5) -> str:
+        """Record a short audio chunk to a temp WAV file using sounddevice."""
+        try:
+            audio_data = sd.rec(int(duration * cls.SAMPLE_RATE), samplerate=cls.SAMPLE_RATE, channels=1, dtype='int16')
+            sd.wait()
+            tmp = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+            wav.write(tmp.name, cls.SAMPLE_RATE, audio_data)
+            return tmp.name
+        except Exception as e:
+            print(f"[WakeWord Record Error]: {e}")
+            return ""
 
     @classmethod
     def detect_wakeword(cls, timeout_seconds: int = 15) -> bool:
         """
-        Listen for speech containing 'FRIDAY' (or 'hello friday').
+        Listen for speech containing 'FRIDAY'.
         Returns True if wake word matched, False if timeout.
         """
         recognizer = sr.Recognizer()
         print("[WakeWord] Listening for 'FRIDAY'...")
 
-        mic = cls.get_microphone()
-        if mic is None:
-            return False
-
         start_time = time.time()
 
-        try:
-            with mic as source:
-                recognizer.adjust_for_ambient_noise(source, duration=0.2)
-                
-                while time.time() - start_time < timeout_seconds:
-                    try:
-                        audio_chunk = recognizer.listen(source, timeout=2.0, phrase_time_limit=2.5)
-                        try:
-                            text = recognizer.recognize_google(audio_chunk).lower()
-                            print(f"[WakeWord Heard]: '{text}'")
-                            if "friday" in text or "friday" in text.replace(" ", ""):
-                                print("[WakeWord] Woken up by 'FRIDAY'!")
-                                return True
-                        except sr.UnknownValueError:
-                            continue
-                    except sr.WaitTimeoutError:
-                        continue
-        except Exception as e:
-            print(f"[WakeWord Loop Error]: {e}")
-            
+        while time.time() - start_time < timeout_seconds:
+            wav_path = cls._record_chunk(duration=2.5)
+            if not wav_path:
+                time.sleep(0.5)
+                continue
+            try:
+                with sr.AudioFile(wav_path) as source:
+                    audio = recognizer.record(source)
+                    text = recognizer.recognize_google(audio).lower()
+                    print(f"[WakeWord Heard]: '{text}'")
+                    if "friday" in text:
+                        print("[WakeWord] Woken up by 'FRIDAY'!")
+                        return True
+            except sr.UnknownValueError:
+                pass
+            except sr.RequestError as e:
+                print(f"[WakeWord API Error]: {e}")
+            except Exception as e:
+                print(f"[WakeWord Transcribe Error]: {e}")
+            finally:
+                try:
+                    os.unlink(wav_path)
+                except OSError:
+                    pass
+
         return False
