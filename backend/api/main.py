@@ -48,7 +48,15 @@ def get_system_status():
     """Return live system telemetry (CPU, RAM, Disk, Battery)."""
     return SystemMonitor.get_metrics()
 
+@app.get("/api/wait-wakeword")
+def wait_for_wakeword(timeout: int = 15):
+    """Wait for 2 Clap Sound + FRIDAY wake word trigger."""
+    from backend.voice.wakeword import ClapAndWakeWordDetector
+    woken = ClapAndWakeWordDetector.detect_claps_and_wakeword(timeout_seconds=timeout)
+    return {"success": woken, "woken": woken}
+
 @app.get("/api/history")
+
 def get_history(limit: int = 50):
     """Retrieve recent conversation history from SQLite database."""
     return {"success": True, "history": MemoryDatabase.get_recent_history(limit=limit)}

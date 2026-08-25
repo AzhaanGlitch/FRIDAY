@@ -42,6 +42,17 @@ Supported actions:
             res = MemoryDatabase.clear_history()
             return {"text_response": "Cleared all conversation history from local database.", "action_executed": "clear_history", "result": res}
 
+        # Terminate System Intent (Shutdown app & loop)
+        elif "terminate the system" in text_lower or "terminate system" in text_lower or "shutdown system" in text_lower:
+            MemoryDatabase.save_message("user", user_text)
+            MemoryDatabase.save_message("friday", "Terminating system. Goodbye sir.", action="terminate_system")
+            return {
+                "text_response": "Terminating system. Goodbye sir.",
+                "action_executed": "terminate_system",
+                "result": {"terminate": True}
+            }
+
+
         # Multi-Step Workflow: Coding Mode
         if "coding mode" in text_lower or "start coding" in text_lower:
             res1 = SystemAutomation.execute_intent("open_app", {"app_name": "Visual Studio Code"})

@@ -115,8 +115,28 @@ html, body {
   pointer-events: none;
 }
 
+/* Standby / Wakeword State */
+.jarvis-core.wakeword .core-nucleus {
+  background: radial-gradient(circle, #ffffff 0%, var(--blue-arc) 70%, #000000 100%);
+  box-shadow: 0 0 25px var(--blue-arc), inset 0 0 15px #ffffff;
+  animation: standbyPulse 3s infinite ease-in-out;
+}
+
+/* Terminated State */
+.jarvis-core.terminated .core-nucleus {
+  background: #ef4444;
+  box-shadow: 0 0 40px #ef4444;
+}
+
+@keyframes standbyPulse {
+  0% { transform: scale(0.95); opacity: 0.7; }
+  50% { transform: scale(1.05); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.7; }
+}
+
 /* 3. Voice States: Listening Wave Animation */
 .jarvis-core.listening .core-nucleus {
+
   box-shadow: 0 0 60px var(--cyan-core), inset 0 0 30px #ffffff;
   transform: scale(1.1);
 }

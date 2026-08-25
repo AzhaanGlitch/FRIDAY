@@ -1,69 +1,131 @@
 import React, { useEffect, useState, useRef } from 'react';
 
 export const App: React.FC = () => {
-  const [voiceState, setVoiceState] = useState<'idle' | 'listening' | 'speaking'>('listening');
+  const [voiceState, setVoiceState] = useState<'idle' | 'wakeword' | 'listening' | 'speaking' | 'terminated'>('idle');
+  const [statusText, setStatusText] = useState('System Initialized. Awaiting "2 Claps + FRIDAY"');
   const wsRef = useRef<WebSocket | null>(null);
+  const isRunningRef = useRef(true);
 
   useEffect(() => {
-    // 1. Automatically start listening on application startup
-    startListening();
-
-    // 2. Connect WebSocket to listen to backend AI responses
+    isRunningRef.current = true;
+    
+    // Connect WebSocket
     const ws = new WebSocket('ws://localhost:8000/ws');
     wsRef.current = ws;
 
-    ws.onopen = () => console.log('[FRIDAY AI] Connected');
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'response') {
-          // AI speaking state animation
-          setVoiceState('speaking');
-          const speakDuration = Math.max(3500, (data.content || '').length * 65);
-          setTimeout(() => {
-            // Auto resume listening state after speech finishes
-            startListening();
-          }, speakDuration);
-        }
-      } catch (err) {
-        console.error('WS Error:', err);
-      }
-    };
+    ws.onopen = () => console.log('[FRIDAY AI] Connected to Core');
+
+    // Start Master Voice State Loop
+    runVoiceLoop();
 
     return () => {
+      isRunningRef.current = false;
       ws.close();
     };
   }, []);
 
-  const startListening = () => {
+  const runVoiceLoop = async () => {
+    if (!isRunningRef.current) return;
+
+    // Step 1: Standby / Awaiting 2 Clap Sound + FRIDAY Wake Word
+    setVoiceState('wakeword');
+    setStatusText('STANDBY MODE: Clap 2 times + say "FRIDAY"');
+
+    try {
+      const wakeRes = await fetch('http://localhost:8000/api/wait-wakeword?timeout=15').then(r => r.json());
+
+      if (!isRunningRef.current) return;
+
+      if (wakeRes.success && wakeRes.woken) {
+        // Step 2: Wake Word Confirmed -> Start Active Voice Listening Loop
+        await startActiveListeningCycle();
+      } else {
+        // Re-enter standby loop if timeout
+        setTimeout(() => runVoiceLoop(), 500);
+      }
+    } catch (err) {
+      console.error('WakeWord error:', err);
+      setTimeout(() => runVoiceLoop(), 2000);
+    }
+  };
+
+  const startActiveListeningCycle = async () => {
+    if (!isRunningRef.current) return;
+
+    // Step 2: Active Voice Listening Mode
     setVoiceState('listening');
-    fetch('http://localhost:8000/api/listen-mic?duration=5', { method: 'POST' })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success && data.response?.text_response) {
-          setVoiceState('speaking');
-          const speakDuration = Math.max(3500, (data.response.text_response || '').length * 65);
-          setTimeout(() => {
-            startListening();
-          }, speakDuration);
-        } else {
-          // Continuous loop - restart listening if silent or finished
-          setTimeout(() => {
-            startListening();
-          }, 800);
+    setStatusText('LISTENING FOR COMMAND...');
+
+    try {
+      const data = await fetch('http://localhost:8000/api/listen-mic?duration=4', { method: 'POST' }).then(r => r.json());
+
+      if (!isRunningRef.current) return;
+
+      if (data.success && data.response?.text_response) {
+        const text = data.response.text_response;
+        const action = data.response.action_executed;
+
+        // Check for System Termination Command
+        if (action === 'terminate_system' || text.toLowerCase().includes('terminating system')) {
+          setVoiceState('terminated');
+          setStatusText('SYSTEM TERMINATED. GOODBYE SIR.');
+          isRunningRef.current = false;
+          // Attempt to close Tauri window if running inside Tauri
+          try {
+            window.close();
+          } catch (e) {}
+          return;
         }
-      })
-      .catch(() => {
+
+        // Step 3: Speaking / Responding State with High Energy Arc Animations
+        setVoiceState('speaking');
+        setStatusText(`FRIDAY: "${text}"`);
+
+        const speakDuration = Math.max(3500, text.length * 65);
         setTimeout(() => {
-          startListening();
-        }, 2000);
-      });
+          if (isRunningRef.current) {
+            // Loop back to active listening after speaking
+            startActiveListeningCycle();
+          }
+        }, speakDuration);
+      } else {
+        // Continuous Listening Loop if silent
+        setTimeout(() => {
+          if (isRunningRef.current) {
+            startActiveListeningCycle();
+          }
+        }, 500);
+      }
+    } catch (err) {
+      console.error('Mic Listening Error:', err);
+      setTimeout(() => {
+        if (isRunningRef.current) {
+          runVoiceLoop();
+        }
+      }, 1500);
+    }
   };
 
   return (
     <div className="jarvis-container">
+      {/* HUD Status Text Display */}
+      <div style={{
+        position: 'absolute',
+        top: '40px',
+        textAlign: 'center',
+        color: voiceState === 'speaking' ? '#a855f7' : voiceState === 'listening' ? '#00f2ff' : voiceState === 'terminated' ? '#ef4444' : '#3b82f6',
+        fontFamily: 'Space Grotesk, sans-serif',
+        letterSpacing: '2px',
+        fontSize: '14px',
+        textTransform: 'uppercase',
+        textShadow: '0 0 10px currentColor',
+        zIndex: 10
+      }}>
+        {statusText}
+      </div>
+
       {/* Iron Man F.R.I.D.A.Y. Reactive Core HUD Orb */}
-      <div className={`jarvis-core ${voiceState}`}>
+      <div className={`jarvis-core ${voiceState}`} onClick={runVoiceLoop} style={{ cursor: 'pointer' }}>
         {/* Core Nucleus */}
         <div className="core-nucleus"></div>
 
