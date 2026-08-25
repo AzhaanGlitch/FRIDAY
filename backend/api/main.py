@@ -13,8 +13,10 @@ from backend.agents.llm_orchestrator import LLMOrchestrator
 from backend.voice.tts import VoiceTTS
 from backend.voice.stt import stt_engine
 from backend.automation.system_monitor import SystemMonitor
+from backend.memory.database import MemoryDatabase
 
 app = FastAPI(title=settings.APP_NAME, version=settings.VERSION)
+
 
 # Enable CORS for desktop frontend
 app.add_middleware(
