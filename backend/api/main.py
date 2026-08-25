@@ -68,8 +68,7 @@ def clear_history():
     return MemoryDatabase.clear_history()
 
 @app.post("/api/listen-mic")
-
-def listen_microphone(duration: int = 4):
+def listen_microphone(duration: int = 7):
     """Record live mic audio for X seconds, transcribe to command, and execute."""
     stt_res = stt_engine.record_and_transcribe(duration_seconds=duration)
     if not stt_res.get("success"):
@@ -77,14 +76,21 @@ def listen_microphone(duration: int = 4):
     
     user_command = stt_res.get("text", "")
     response = LLMOrchestrator.process_command(user_command)
+
+    # Run TTS in background thread so we don't block the HTTP response
+    tts_duration_ms = 0
     if response.get("text_response"):
-        VoiceTTS.speak(response["text_response"])
+        text_resp = response["text_response"]
+        tts_duration_ms = max(3000, len(text_resp) * 65)
+        threading.Thread(target=VoiceTTS.speak, args=(text_resp,), daemon=True).start()
         
     return {
         "success": True,
         "transcribed_command": user_command,
-        "response": response
+        "response": response,
+        "tts_duration_ms": tts_duration_ms
     }
+
 
 
 @app.post("/api/command")

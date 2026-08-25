@@ -2,7 +2,11 @@ import sounddevice as sd
 import scipy.io.wavfile as wav
 import speech_recognition as sr
 import tempfile
+import threading
 import os
+
+# Global mutex — only one mic recording at a time
+_mic_lock = threading.Lock()
 
 class VoiceSTT:
     """Speech-to-Text engine using sounddevice (no PyAudio) for microphone recording."""
@@ -13,8 +17,14 @@ class VoiceSTT:
         self.model_size = model_size
         self.recognizer = sr.Recognizer()
 
-    def record_and_transcribe(self, duration_seconds: int = 4) -> dict:
-        """Record live audio from system microphone using sounddevice and transcribe to text."""
+    def record_and_transcribe(self, duration_seconds: int = 7) -> dict:
+        """Record live audio from system microphone using sounddevice and transcribe to text.
+        Uses a global lock to prevent two recordings from running at once.
+        """
+        # Acquire lock — if another recording is already running, reject immediately
+        if not _mic_lock.acquire(blocking=False):
+            return {"success": False, "error": "Another recording is already in progress"}
+
         wav_path = ""
         try:
             print(f"[STT] Recording audio for {duration_seconds} seconds...")
@@ -36,6 +46,7 @@ class VoiceSTT:
         except Exception as e:
             return {"success": False, "error": str(e)}
         finally:
+            _mic_lock.release()
             if wav_path:
                 try:
                     os.unlink(wav_path)

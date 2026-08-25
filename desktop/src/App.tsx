@@ -2,9 +2,10 @@ import React, { useEffect, useState, useRef } from 'react';
 
 export const App: React.FC = () => {
   const [voiceState, setVoiceState] = useState<'idle' | 'wakeword' | 'listening' | 'speaking' | 'terminated'>('idle');
-  const [statusText, setStatusText] = useState('System Initialized. Awaiting "2 Claps + FRIDAY"');
+  const [statusText, setStatusText] = useState('System Initialized. Say "FRIDAY" to wake up.');
   const wsRef = useRef<WebSocket | null>(null);
   const isRunningRef = useRef(true);
+  const loopActiveRef = useRef(false); // Prevent duplicate loops
 
   useEffect(() => {
     isRunningRef.current = true;
@@ -15,8 +16,11 @@ export const App: React.FC = () => {
 
     ws.onopen = () => console.log('[FRIDAY AI] Connected to Core');
 
-    // Start Master Voice State Loop
-    runVoiceLoop();
+    // Start Master Voice State Loop (only once)
+    if (!loopActiveRef.current) {
+      loopActiveRef.current = true;
+      runVoiceLoop();
+    }
 
     return () => {
       isRunningRef.current = false;
@@ -25,24 +29,26 @@ export const App: React.FC = () => {
   }, []);
 
   const runVoiceLoop = async () => {
-    if (!isRunningRef.current) return;
+    if (!isRunningRef.current) {
+      loopActiveRef.current = false;
+      return;
+    }
 
     // Step 1: Standby / Awaiting 'FRIDAY' Wake Word
     setVoiceState('wakeword');
     setStatusText('STANDBY MODE: Say "FRIDAY" to Wake Up');
 
-
     try {
       const wakeRes = await fetch('http://localhost:8000/api/wait-wakeword?timeout=15').then(r => r.json());
 
-      if (!isRunningRef.current) return;
+      if (!isRunningRef.current) { loopActiveRef.current = false; return; }
 
       if (wakeRes.success && wakeRes.woken) {
         // Step 2: Wake Word Confirmed -> Start Active Voice Listening Loop
         await startActiveListeningCycle();
       } else {
         // Re-enter standby loop if timeout
-        setTimeout(() => runVoiceLoop(), 500);
+        setTimeout(() => runVoiceLoop(), 300);
       }
     } catch (err) {
       console.error('WakeWord error:', err);
@@ -51,16 +57,16 @@ export const App: React.FC = () => {
   };
 
   const startActiveListeningCycle = async () => {
-    if (!isRunningRef.current) return;
+    if (!isRunningRef.current) { loopActiveRef.current = false; return; }
 
     // Step 2: Active Voice Listening Mode
     setVoiceState('listening');
     setStatusText('LISTENING FOR COMMAND...');
 
     try {
-      const data = await fetch('http://localhost:8000/api/listen-mic?duration=4', { method: 'POST' }).then(r => r.json());
+      const data = await fetch('http://localhost:8000/api/listen-mic?duration=7', { method: 'POST' }).then(r => r.json());
 
-      if (!isRunningRef.current) return;
+      if (!isRunningRef.current) { loopActiveRef.current = false; return; }
 
       if (data.success && data.response?.text_response) {
         const text = data.response.text_response;
@@ -71,39 +77,43 @@ export const App: React.FC = () => {
           setVoiceState('terminated');
           setStatusText('SYSTEM TERMINATED. GOODBYE SIR.');
           isRunningRef.current = false;
-          // Attempt to close Tauri window if running inside Tauri
+          loopActiveRef.current = false;
           try {
             window.close();
           } catch (e) {}
           return;
         }
 
-        // Step 3: Speaking / Responding State with High Energy Arc Animations
+        // Step 3: Speaking / Responding — use backend-provided TTS duration
         setVoiceState('speaking');
         setStatusText(`FRIDAY: "${text}"`);
 
-        const speakDuration = Math.max(3500, text.length * 65);
-        setTimeout(() => {
-          if (isRunningRef.current) {
-            // Loop back to active listening after speaking
-            startActiveListeningCycle();
-          }
-        }, speakDuration);
+        const speakDuration = data.tts_duration_ms || Math.max(3500, text.length * 65);
+        await new Promise(resolve => setTimeout(resolve, speakDuration));
+
+        if (isRunningRef.current) {
+          // Loop back to active listening after speaking finishes
+          await startActiveListeningCycle();
+        }
+      } else if (data.error === 'Another recording is already in progress') {
+        // Another recording is running (shouldn't happen with the lock, but safety)
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        if (isRunningRef.current) {
+          await startActiveListeningCycle();
+        }
       } else {
-        // Continuous Listening Loop if silent
-        setTimeout(() => {
-          if (isRunningRef.current) {
-            startActiveListeningCycle();
-          }
-        }, 500);
-      }
-    } catch (err) {
-      console.error('Mic Listening Error:', err);
-      setTimeout(() => {
+        // No speech detected — wait briefly, then loop back to wakeword standby
+        await new Promise(resolve => setTimeout(resolve, 500));
         if (isRunningRef.current) {
           runVoiceLoop();
         }
-      }, 1500);
+      }
+    } catch (err) {
+      console.error('Mic Listening Error:', err);
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      if (isRunningRef.current) {
+        runVoiceLoop();
+      }
     }
   };
 
@@ -125,8 +135,8 @@ export const App: React.FC = () => {
         {statusText}
       </div>
 
-      {/* Iron Man F.R.I.D.A.Y. Reactive Core HUD Orb */}
-      <div className={`jarvis-core ${voiceState}`} onClick={runVoiceLoop} style={{ cursor: 'pointer' }}>
+      {/* Iron Man F.R.I.D.A.Y. Reactive Core HUD Orb — no onClick to prevent duplicate loops */}
+      <div className={`jarvis-core ${voiceState}`} style={{ cursor: 'default' }}>
         {/* Core Nucleus */}
         <div className="core-nucleus"></div>
 
