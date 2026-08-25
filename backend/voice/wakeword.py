@@ -16,12 +16,18 @@ class WakeWordDetector:
         start_time = time.time()
 
         try:
-            with sr.Microphone() as source:
+            try:
+                source_mic = sr.Microphone()
+            except Exception as mic_err:
+                print(f"[WakeWord Mic Error]: {mic_err}")
+                return False
+
+            with source_mic as source:
                 recognizer.adjust_for_ambient_noise(source, duration=0.3)
                 
                 while time.time() - start_time < timeout_seconds:
                     try:
-                        audio_chunk = recognizer.listen(source, timeout=3.0, phrase_time_limit=3.0)
+                        audio_chunk = recognizer.listen(source, timeout=2.5, phrase_time_limit=2.5)
                         try:
                             text = recognizer.recognize_google(audio_chunk).lower()
                             print(f"[WakeWord Heard]: '{text}'")
@@ -33,6 +39,7 @@ class WakeWordDetector:
                     except sr.WaitTimeoutError:
                         continue
         except Exception as e:
-            print(f"[WakeWord Error]: {e}")
+            print(f"[WakeWord Loop Error]: {e}")
             
         return False
+
