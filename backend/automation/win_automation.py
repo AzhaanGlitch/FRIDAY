@@ -2,6 +2,8 @@ import sys
 import os
 import subprocess
 import webbrowser
+import glob
+from difflib import SequenceMatcher
 
 class WinAutomation:
     """Advanced automation adapter for Windows operations using PowerShell & CMD."""
@@ -10,15 +12,178 @@ class WinAutomation:
     def is_windows() -> bool:
         return sys.platform == "win32"
 
+    # Cache of discovered Start Menu shortcuts: {lowercase_name: full_path_to_lnk}
+    _shortcut_cache = None
+
+    # Built-in system apps that are always on PATH or have known locations
+    _BUILTIN_APPS = {
+        "notepad": "notepad.exe",
+        "calculator": "calc.exe",
+        "calc": "calc.exe",
+        "paint": "mspaint.exe",
+        "wordpad": "wordpad.exe",
+        "task manager": "taskmgr.exe",
+        "taskmgr": "taskmgr.exe",
+        "explorer": "explorer.exe",
+        "file explorer": "explorer.exe",
+        "cmd": "cmd.exe",
+        "command prompt": "cmd.exe",
+        "powershell": "powershell.exe",
+        "control panel": "control.exe",
+        "snipping tool": "SnippingTool.exe",
+        "regedit": "regedit.exe",
+        "settings": "ms-settings:",
+        "system settings": "ms-settings:",
+        "store": "ms-windows-store:",
+        "microsoft store": "ms-windows-store:",
+    }
+
+    # Alias map: alternate user names -> canonical shortcut name to search for
+    _NAME_ALIASES = {
+        "chrome": "google chrome",
+        "firefox": "mozilla firefox",
+        "edge": "microsoft edge",
+        "vs code": "visual studio code",
+        "vscode": "visual studio code",
+        "code": "visual studio code",
+        "terminal": "windows terminal",
+        "word": "microsoft word",
+        "excel": "microsoft excel",
+        "powerpoint": "microsoft powerpoint",
+        "outlook": "microsoft outlook",
+        "teams": "microsoft teams",
+        "obs": "obs studio",
+    }
+
+    @classmethod
+    def _build_shortcut_cache(cls):
+        """Scan Start Menu folders for .lnk files and build a name -> path cache."""
+        cache = {}
+        search_dirs = []
+
+        # User Start Menu
+        appdata = os.environ.get("APPDATA", "")
+        if appdata:
+            search_dirs.append(os.path.join(appdata, "Microsoft", "Windows", "Start Menu", "Programs"))
+
+        # All Users Start Menu
+        programdata = os.environ.get("ProgramData", "")
+        if programdata:
+            search_dirs.append(os.path.join(programdata, "Microsoft", "Windows", "Start Menu", "Programs"))
+
+        for search_dir in search_dirs:
+            if not os.path.isdir(search_dir):
+                continue
+            for root, dirs, files in os.walk(search_dir):
+                for f in files:
+                    if f.lower().endswith(".lnk"):
+                        name = f[:-4]  # strip .lnk
+                        full_path = os.path.join(root, f)
+                        cache[name.lower()] = full_path
+
+        cls._shortcut_cache = cache
+        return cache
+
+    @classmethod
+    def _get_shortcuts(cls):
+        """Return the shortcut cache, building it if needed."""
+        if cls._shortcut_cache is None:
+            cls._build_shortcut_cache()
+        return cls._shortcut_cache
+
+    @classmethod
+    def _fuzzy_match(cls, query: str, candidates: list, threshold: float = 0.45) -> str | None:
+        """Find the best fuzzy match for query among candidates.
+        Uses substring matching first, then falls back to SequenceMatcher."""
+        query_lower = query.lower()
+
+        # Priority 1: Exact match
+        if query_lower in candidates:
+            return query_lower
+
+        # Priority 2: Candidate starts with query or query starts with candidate
+        for c in candidates:
+            if c.startswith(query_lower) or query_lower.startswith(c):
+                return c
+
+        # Priority 3: Query is a substring of candidate
+        substring_matches = [c for c in candidates if query_lower in c]
+        if substring_matches:
+            # Return the shortest match (most specific)
+            return min(substring_matches, key=len)
+
+        # Priority 4: Candidate is a substring of query
+        reverse_matches = [c for c in candidates if c in query_lower]
+        if reverse_matches:
+            return max(reverse_matches, key=len)
+
+        # Priority 5: Fuzzy ratio matching
+        best_match = None
+        best_score = 0.0
+        for c in candidates:
+            score = SequenceMatcher(None, query_lower, c).ratio()
+            if score > best_score:
+                best_score = score
+                best_match = c
+
+        if best_score >= threshold:
+            return best_match
+        return None
+
     @classmethod
     def open_application(cls, app_name: str) -> dict:
-        """Open an application on Windows using Start command."""
+        """Open an application on Windows using Start Menu shortcut discovery with fuzzy matching."""
         if not cls.is_windows():
             return {"success": False, "error": "Not running on Windows"}
         try:
             clean_name = app_name.strip()
-            subprocess.run(["cmd.exe", "/c", f"start {clean_name}"], check=True, shell=True)
-            return {"success": True, "message": f"Successfully launched {clean_name}"}
+            lookup_key = clean_name.lower()
+
+            # Step 1: Check built-in system apps (always available on PATH)
+            builtin = cls._BUILTIN_APPS.get(lookup_key)
+            if builtin:
+                if builtin.endswith(":"):
+                    # URI scheme (ms-settings:, ms-windows-store:, etc.)
+                    os.startfile(builtin)
+                else:
+                    subprocess.Popen(builtin, shell=True)
+                return {"success": True, "message": f"Successfully launched {clean_name}"}
+
+            # Step 2: Resolve aliases to canonical names
+            canonical = cls._NAME_ALIASES.get(lookup_key, lookup_key)
+
+            # Step 3: Search Start Menu shortcuts with fuzzy matching
+            shortcuts = cls._get_shortcuts()
+            match = cls._fuzzy_match(canonical, list(shortcuts.keys()))
+
+            if match:
+                lnk_path = shortcuts[match]
+                os.startfile(lnk_path)
+                matched_name = match.title()
+                return {"success": True, "message": f"Successfully launched {matched_name}"}
+
+            # Step 4: If alias didn't help, try fuzzy matching on the original input too
+            if canonical != lookup_key:
+                match = cls._fuzzy_match(lookup_key, list(shortcuts.keys()))
+                if match:
+                    lnk_path = shortcuts[match]
+                    os.startfile(lnk_path)
+                    matched_name = match.title()
+                    return {"success": True, "message": f"Successfully launched {matched_name}"}
+
+            # Step 5: Rebuild cache and try once more (app might have been installed recently)
+            cls._build_shortcut_cache()
+            shortcuts = cls._shortcut_cache
+            match = cls._fuzzy_match(canonical, list(shortcuts.keys()))
+            if not match:
+                match = cls._fuzzy_match(lookup_key, list(shortcuts.keys()))
+            if match:
+                lnk_path = shortcuts[match]
+                os.startfile(lnk_path)
+                matched_name = match.title()
+                return {"success": True, "message": f"Successfully launched {matched_name}"}
+
+            return {"success": False, "error": f"Application '{clean_name}' not found. Available apps can be found in your Start Menu."}
         except Exception as e:
             return {"success": False, "error": str(e)}
 
