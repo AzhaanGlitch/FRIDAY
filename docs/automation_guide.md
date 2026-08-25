@@ -1,66 +1,44 @@
 # System Automation Documentation
 
-This document explains how FRIDAY handles cross-platform automation on **macOS** and **Windows**.
+This document details all advanced native automations supported by **FRIDAY AI Assistant** across **macOS** and **Windows**.
 
 ---
 
 ## 1. Architecture Overview
 
-Automation calls pass through a unified interface:
+Automation requests pass through the unified `SystemAutomation` interface, which routes intents to platform-specific adapters (`MacAutomation` for macOS and `WinAutomation` for Windows):
 
 ```
-                  ┌────────────────────────┐
-                  │ SystemAutomation Router│
-                  └───────────┬────────────┘
-                              │
-             ┌────────────────┴────────────────┐
-             ▼                                 ▼
-┌─────────────────────────┐       ┌─────────────────────────┐
-│  MacAutomation Adapter  │       │  WinAutomation Adapter  │
-│      (macOS / Darwin)   │       │       (Windows / win32) │
-└─────────────────────────┘       └─────────────────────────┘
+                   ┌───────────────────────────┐
+                   │ SystemAutomation Router   │
+                   └─────────────┬─────────────┘
+                                 │
+           ┌─────────────────────┴─────────────────────┐
+           ▼                                           ▼
+┌─────────────────────────────┐             ┌─────────────────────────────┐
+│    MacAutomation Adapter    │             │    WinAutomation Adapter    │
+│      (macOS / Darwin)       │             │      (Windows / win32)      │
+└─────────────────────────────┘             └─────────────────────────────┘
 ```
 
 ---
 
-## 2. macOS Automation (`backend/automation/mac_automation.py`)
+## 2. Advanced Automation Commands & Platform Implementation
 
-### 1. Application Launching (`open_application`)
-- **Technology**: Native macOS binary `open -a "<AppName>"`
-- **How it works**: Spawns macOS system process dispatcher. Automatically resolves paths for macOS applications (e.g. `Spotify`, `Calculator`, `Visual Studio Code`, `Safari`, `Terminal`).
-
-### 2. Volume Control (`set_volume`)
-- **Technology**: AppleScript via `osascript -e`
-- **Script**: `set volume output volume <0-100>`
-- **How it works**: Directly instructs the macOS CoreAudio engine to update speaker output volume dynamically without requiring admin privileges.
-
-### 3. Screen Capture (`take_screenshot`)
-- **Technology**: macOS system utility `screencapture -x <path>`
-- **How it works**: Quietly captures primary display screenshot to file (used by Vision module).
-
----
-
-## 3. Windows Automation (`backend/automation/win_automation.py`)
-
-### 1. Application Launching (`open_application`)
-- **Technology**: Windows CMD Shell `start <AppName>`
-- **How it works**: Uses Windows Shell launcher to locate and open installed desktop apps or executables registered in the Windows Path or Registry.
-
-### 2. Volume Control (`set_volume`)
-- **Technology**: Windows PowerShell `WScript.Shell` / `SendKeys`
-- **How it works**: Sends native virtual keycodes (`VK_VOLUME_UP` / `VK_VOLUME_DOWN`) to adjust Windows Master Volume.
-
-### 3. Screen Capture (`take_screenshot`)
-- **Technology**: Windows PowerShell `Graphics.CopyFromScreen` via `.NET` (`System.Drawing`)
-- **How it works**: Uses native .NET GDI+ API to grab screen bounds and write PNG screenshots.
-
----
-
-## 4. Supported Automation Commands Summary
-
-| Intent Command | macOS Implementation | Windows Implementation |
-| :--- | :--- | :--- |
-| `open <app>` | `open -a <app>` | `cmd.exe /c start <app>` |
-| `set volume to <X>` | `osascript set volume output volume X` | PowerShell `WScript.Shell SendKeys` |
-| `take screenshot` | `screencapture -x <path>` | PowerShell `.NET CopyFromScreen` |
-| `system info` | `platform`, `sys.platform` | `platform`, `sys.platform` |
+| Category | Intent Command | macOS Implementation | Windows Implementation |
+| :--- | :--- | :--- | :--- |
+| **App Launching** | `open <app>` | `open -a "<AppName>"` | `cmd.exe /c start <AppName>` |
+| **App Closing** | `close <app>` | AppleScript `tell app to quit` / `pkill` | `taskkill /F /IM <AppName>.exe` |
+| **Volume Control** | `set volume to X%` | `osascript -e 'set volume output volume X'` | PowerShell `WScript.Shell` SendKeys |
+| **Mute / Unmute** | `mute sound` / `unmute sound` | `osascript -e 'set volume output muted true'` | PowerShell `SendKeys([char]173)` |
+| **Brightness Control** | `set brightness to X%` | `brightness` utility / AppleScript | PowerShell WMI `WmiSetBrightness` |
+| **Minimize All** | `minimize all` / `show desktop` | AppleScript Finder hide all windows | PowerShell `Shell.Application MinimizeAll()` |
+| **Media Playback** | `play`, `pause`, `next`, `previous` | AppleScript Spotify & System Events | PowerShell `SendKeys` Media Keys |
+| **Lock Screen** | `lock screen` | AppleScript Control+Cmd+Q keystroke | `rundll32.exe user32.dll,LockWorkStation` |
+| **Sleep Laptop** | `sleep system` | `pmset sleepnow` | `rundll32.exe powrprof.dll,SetSuspendState` |
+| **Clipboard Read** | `read clipboard` | `pbpaste` system utility | PowerShell `Get-Clipboard` |
+| **Clipboard Write** | `copy <text>` | `pbcopy` system utility | PowerShell `Set-Clipboard -Value` |
+| **File Search** | `find file <name>` | `mdfind -name <name>` (Spotlight) | PowerShell `Get-ChildItem -Filter` |
+| **Open Web URL** | `open <url>` | Python `webbrowser.open(url)` | Python `webbrowser.open(url)` |
+| **Screenshot** | `take a screenshot` | `screencapture -x <path>` | PowerShell .NET GDI+ `CopyFromScreen` |
+| **Multi-Step Coding Mode**| `start coding mode` | Opens VS Code + Terminal + GitHub + Audio | Opens VS Code + Terminal + GitHub + Audio |

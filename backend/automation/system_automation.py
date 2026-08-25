@@ -13,30 +13,56 @@ class SystemAutomation:
 
         if intent == "open_app":
             app_name = params.get("app_name", "")
-            if is_mac:
-                return MacAutomation.open_application(app_name)
-            elif is_win:
-                return WinAutomation.open_application(app_name)
-            return {"success": False, "error": f"Unsupported platform: {sys.platform}"}
+            return MacAutomation.open_application(app_name) if is_mac else WinAutomation.open_application(app_name) if is_win else {"success": False, "error": f"Unsupported platform: {sys.platform}"}
+
+        elif intent == "close_app":
+            app_name = params.get("app_name", "")
+            return MacAutomation.close_application(app_name) if is_mac else WinAutomation.close_application(app_name) if is_win else {"success": False, "error": f"Unsupported platform: {sys.platform}"}
 
         elif intent == "set_volume":
             level = params.get("level", 50)
-            if is_mac:
-                return MacAutomation.set_volume(level)
-            elif is_win:
-                return WinAutomation.set_volume(level)
-            return {"success": False, "error": f"Unsupported platform: {sys.platform}"}
+            return MacAutomation.set_volume(level) if is_mac else WinAutomation.set_volume(level) if is_win else {"success": False, "error": f"Unsupported platform: {sys.platform}"}
+
+        elif intent == "mute_sound":
+            mute = params.get("mute", True)
+            return MacAutomation.mute_sound(mute) if is_mac else WinAutomation.mute_sound(mute) if is_win else {"success": False, "error": f"Unsupported platform: {sys.platform}"}
+
+        elif intent == "minimize_all":
+            return MacAutomation.minimize_all() if is_mac else WinAutomation.minimize_all() if is_win else {"success": False, "error": f"Unsupported platform: {sys.platform}"}
+
+        elif intent == "media_control":
+            action = params.get("action", "play_pause")
+            return MacAutomation.media_control(action) if is_mac else WinAutomation.media_control(action) if is_win else {"success": False, "error": f"Unsupported platform: {sys.platform}"}
+
+        elif intent == "lock_screen":
+            return MacAutomation.lock_screen() if is_mac else WinAutomation.lock_screen() if is_win else {"success": False, "error": f"Unsupported platform: {sys.platform}"}
+
+        elif intent == "sleep_system":
+            return MacAutomation.sleep_system() if is_mac else WinAutomation.sleep_system() if is_win else {"success": False, "error": f"Unsupported platform: {sys.platform}"}
+
+        elif intent == "set_brightness":
+            level = params.get("level", 80)
+            return MacAutomation.set_brightness(level) if is_mac else WinAutomation.set_brightness(level) if is_win else {"success": False, "error": f"Unsupported platform: {sys.platform}"}
+
+        elif intent == "clipboard_get":
+            return MacAutomation.clipboard_get() if is_mac else WinAutomation.clipboard_get() if is_win else {"success": False, "error": f"Unsupported platform: {sys.platform}"}
+
+        elif intent == "clipboard_set":
+            text = params.get("text", "")
+            return MacAutomation.clipboard_set(text) if is_mac else WinAutomation.clipboard_set(text) if is_win else {"success": False, "error": f"Unsupported platform: {sys.platform}"}
+
+        elif intent == "search_file":
+            filename = params.get("filename", "")
+            return MacAutomation.search_file(filename) if is_mac else WinAutomation.search_file(filename) if is_win else {"success": False, "error": f"Unsupported platform: {sys.platform}"}
+
+        elif intent == "open_url":
+            url = params.get("url", "")
+            return MacAutomation.open_url(url) if is_mac else WinAutomation.open_url(url) if is_win else {"success": False, "error": f"Unsupported platform: {sys.platform}"}
 
         elif intent == "take_screenshot":
-            if is_mac:
-                return MacAutomation.take_screenshot()
-            elif is_win:
-                return WinAutomation.take_screenshot()
-            return {"success": False, "error": f"Unsupported platform: {sys.platform}"}
+            return MacAutomation.take_screenshot() if is_mac else WinAutomation.take_screenshot() if is_win else {"success": False, "error": f"Unsupported platform: {sys.platform}"}
 
         elif intent == "system_info":
-            if is_mac:
-                return MacAutomation.get_system_info()
-            return {"success": True, "info": {"platform": sys.platform}}
+            return MacAutomation.get_system_info() if is_mac else {"success": True, "info": {"platform": sys.platform}}
 
         return {"success": False, "error": f"Unknown automation intent: {intent}"}
