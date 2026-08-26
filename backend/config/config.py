@@ -30,7 +30,8 @@ class Settings(BaseModel):
     
     # Voice Settings
     WAKE_WORD: str = os.getenv("WAKE_WORD", "FRIDAY")
-    MIC_RECORD_DURATION_SECONDS: int = int(os.getenv("MIC_RECORD_DURATION_SECONDS", "7"))
+    MIC_RECORD_DURATION_SECONDS: float = float(os.getenv("MIC_RECORD_DURATION_SECONDS", "4.5"))
+
     TTS_VOICE_RATE: int = int(os.getenv("TTS_VOICE_RATE", "190"))
 
 settings = Settings()
