@@ -12,9 +12,9 @@ class LLMOrchestrator:
 Rules:
 1. If the user wants to control the computer or open/close apps/websites, output a JSON object: {"action": "<action_name>", "params": {...}, "spoken_reply": "<short reply to speak>"}.
 2. Supported actions:
-   - open_app: {"app_name": "Spotify" | "VSCode" | "Chrome" | "Terminal" | ...}
+   - open_app: {"app_name": "Spotify" | "Visual Studio Code" | "Google Chrome" | "Terminal" | "Calculator" | "Safari" | "Music" | ...}
    - close_app: {"app_name": "Spotify" | ...}
-   - open_url: {"url": "youtube.com" | "google.com" | "github.com" | ...}
+   - open_url: {"url": "youtube.com" | "github.com" | ...}
    - set_volume: {"level": 0-100}
    - mute_sound: {"mute": true | false}
    - set_brightness: {"level": 0-100}
@@ -29,7 +29,7 @@ Rules:
     def _fuzzy_direct_match(cls, text_lower: str) -> dict | None:
         """
         Ultra-fast direct keyword & fuzzy regex matching (< 1ms).
-        Immediately triggers common commands even with imperfect transcription.
+        Prioritizes native installed macOS applications first before web fallback.
         """
         # 1. Termination
         if any(w in text_lower for w in ["terminate the system", "terminate system", "shutdown system", "exit system", "goodbye friday"]):
@@ -39,62 +39,94 @@ Rules:
                 "spoken_reply": "Terminating system. Goodbye sir."
             }
 
-        # 2. Open App / Websites (Fuzzy matching)
-        # Catches "open spotify", "open up spotify", "launch spotify", "can you open spotify", "spotify please", "start spotify"
-        open_match = re.search(r'(?:open|launch|start|run|play on)\s+(?:up\s+)?([a-zA-Z0-9\.\s]+)', text_lower)
-        if open_match or any(w in text_lower for w in ["spotify", "youtube", "chrome", "google", "vscode", "terminal", "calculator", "safari"]):
-            target = open_match.group(1).strip() if open_match else text_lower
-            target = target.replace("please", "").replace("for me", "").replace("the app", "").replace("app", "").strip()
+        # 2. Open App (Prioritize Native Desktop Apps!)
+        app_map = {
+            "spotify": "Spotify",
+            "calculator": "Calculator",
+            "calc": "Calculator",
+            "vscode": "Visual Studio Code",
+            "vs code": "Visual Studio Code",
+            "code": "Visual Studio Code",
+            "chrome": "Google Chrome",
+            "google chrome": "Google Chrome",
+            "safari": "Safari",
+            "terminal": "Terminal",
+            "finder": "Finder",
+            "music": "Music",
+            "apple music": "Music",
+            "notes": "Notes",
+            "mail": "Mail",
+            "messages": "Messages",
+            "slack": "Slack",
+            "discord": "Discord",
+            "settings": "System Settings",
+            "system settings": "System Settings",
+            "photos": "Photos",
+            "calendar": "Calendar",
+            "facetime": "FaceTime",
+            "whatsapp": "WhatsApp",
+            "telegram": "Telegram",
+            "zoom": "zoom.us",
+            "figma": "Figma",
+            "notion": "Notion"
+        }
 
-            # Check websites
-            web_domains = {
-                "youtube": "youtube.com", "google": "google.com", "github": "github.com",
-                "twitter": "twitter.com", "x": "x.com", "reddit": "reddit.com",
-                "netflix": "netflix.com", "facebook": "facebook.com", "instagram": "instagram.com",
-                "linkedin": "linkedin.com", "chatgpt": "chatgpt.com"
-            }
-            for key, domain in web_domains.items():
-                if key in target or key == text_lower.strip():
-                    return {
-                        "action": "open_url",
-                        "params": {"url": domain},
-                        "spoken_reply": f"Opening {key.capitalize()} in your browser."
-                    }
-
-            if "." in target or target.startswith("http"):
+        # Check if any app name is directly spoken
+        for app_key, app_val in app_map.items():
+            # Matches "open spotify", "spotify", "launch spotify", "play spotify", "start spotify"
+            pattern = rf'(?:open|launch|start|run|play)?\s*(?:the\s+app\s+)?\b{re.escape(app_key)}\b'
+            if re.search(pattern, text_lower):
                 return {
-                    "action": "open_url",
-                    "params": {"url": target},
-                    "spoken_reply": f"Opening {target}."
+                    "action": "open_app",
+                    "params": {"app_name": app_val},
+                    "spoken_reply": f"Opening {app_val}."
                 }
 
-            # Check Applications
-            app_map = {
-                "spotify": "Spotify", "calculator": "Calculator", "calc": "Calculator",
-                "vscode": "Visual Studio Code", "code": "Visual Studio Code", "vs code": "Visual Studio Code",
-                "finder": "Finder", "safari": "Safari", "chrome": "Google Chrome",
-                "google chrome": "Google Chrome", "terminal": "Terminal", "notepad": "Notepad",
-                "settings": "System Settings", "music": "Music", "mail": "Mail", "slack": "Slack"
-            }
-            for app_key, app_val in app_map.items():
-                if app_key in target:
-                    return {
-                        "action": "open_app",
-                        "params": {"app_name": app_val},
-                        "spoken_reply": f"Opening {app_val}."
-                    }
+        # 3. Web URL Open (For websites specifically)
+        web_domains = {
+            "youtube": "youtube.com",
+            "google": "google.com",
+            "github": "github.com",
+            "twitter": "twitter.com",
+            "x.com": "x.com",
+            "reddit": "reddit.com",
+            "netflix": "netflix.com",
+            "chatgpt": "chatgpt.com",
+            "linkedin": "linkedin.com",
+            "instagram": "instagram.com",
+            "facebook": "facebook.com",
+            "amazon": "amazon.com"
+        }
+        for site_key, domain in web_domains.items():
+            if site_key in text_lower:
+                return {
+                    "action": "open_url",
+                    "params": {"url": domain},
+                    "spoken_reply": f"Opening {site_key.capitalize()} in your browser."
+                }
 
-        # 3. Close App
+        if "." in text_lower and any(w in text_lower for w in [".com", ".org", ".io", ".dev", ".ai", "http"]):
+            words = text_lower.split()
+            url = next((w for w in words if "." in w or w.startswith("http")), words[-1])
+            return {
+                "action": "open_url",
+                "params": {"url": url},
+                "spoken_reply": f"Opening {url}."
+            }
+
+        # 4. Close App
         close_match = re.search(r'(?:close|quit|exit|kill|stop)\s+(?:up\s+)?([a-zA-Z0-9\.\s]+)', text_lower)
         if close_match:
             target = close_match.group(1).strip().replace("please", "").strip()
+            # Map target to proper app name if found
+            app_target = app_map.get(target.lower(), target.capitalize())
             return {
                 "action": "close_app",
-                "params": {"app_name": target.capitalize()},
-                "spoken_reply": f"Closing {target.capitalize()}."
+                "params": {"app_name": app_target},
+                "spoken_reply": f"Closing {app_target}."
             }
 
-        # 4. Volume Controls
+        # 5. Volume Controls
         if "volume" in text_lower or "sound" in text_lower:
             if "mute" in text_lower:
                 return {"action": "mute_sound", "params": {"mute": True}, "spoken_reply": "Muting system audio."}
@@ -104,7 +136,7 @@ Rules:
             level = int(numbers[0]) if numbers else 50
             return {"action": "set_volume", "params": {"level": level}, "spoken_reply": f"Setting volume to {level}%."}
 
-        # 5. Media Playback
+        # 6. Media Playback
         if any(w in text_lower for w in ["pause music", "pause song", "pause playback", "pause"]):
             return {"action": "media_control", "params": {"action": "pause"}, "spoken_reply": "Paused playback."}
         if any(w in text_lower for w in ["play music", "resume music", "play song", "resume"]):
@@ -112,15 +144,15 @@ Rules:
         if any(w in text_lower for w in ["next song", "next track", "skip song"]):
             return {"action": "media_control", "params": {"action": "next"}, "spoken_reply": "Skipping to next track."}
 
-        # 6. Screenshot
+        # 7. Screenshot
         if "screenshot" in text_lower or "screen capture" in text_lower:
             return {"action": "take_screenshot", "params": {}, "spoken_reply": "Screenshot captured."}
 
-        # 7. Lock screen
+        # 8. Lock screen
         if "lock screen" in text_lower or "lock mac" in text_lower:
             return {"action": "lock_screen", "params": {}, "spoken_reply": "Locking screen."}
 
-        # 8. Coding mode
+        # 9. Coding mode
         if "coding mode" in text_lower or "start coding" in text_lower:
             return {"action": "coding_mode", "params": {}, "spoken_reply": "Coding mode initiated."}
 
