@@ -1,9 +1,11 @@
 import json
 import re
+import sys
 import requests
 from backend.config.config import settings
 from backend.automation.system_automation import SystemAutomation
 from backend.memory.database import MemoryDatabase
+
 
 class LLMOrchestrator:
     """Orchestrates natural language intent parsing, phonetic auto-correction, and direct voice execution."""
@@ -219,13 +221,14 @@ RULES:
         if any(w in text_lower for w in ["lock screen", "lock mac", "lock kardo", "screen lock"]):
             return {"action": "lock_screen", "params": {}, "spoken_reply": "Screen lock kar rahi hoon." if is_hindi else "Locking screen."}
 
-        # 11. Coding mode (Side-by-side tile: VS Code on Left 50% | Terminal on Right 50%)
+        # 11. Coding mode (Left 50%: VS Code | Top-Right 25%: Terminal | Bottom-Right 25%: GitHub Browser)
         if any(w in text_lower for w in ["coding mode", "start coding", "coding shuru", "coding", "code mode"]):
             return {
                 "action": "coding_mode",
                 "params": {},
-                "spoken_reply": "Coding mode shuru kar diya hai. VS Code aur Terminal tile kar diye hain." if is_hindi else "Coding mode initiated. VS Code and Terminal tiled side-by-side."
+                "spoken_reply": "Coding mode shuru kar diya hai. VS Code left me, Terminal top right me, aur GitHub bottom right me tile kar diye hain." if is_hindi else "Coding mode initiated. VS Code on left, Terminal top-right, and GitHub bottom-right tiled."
             }
+
 
         return None
 
@@ -304,9 +307,13 @@ RULES:
 
             # Execute intent immediately
             if action == "coding_mode":
-                # Launch and auto-tile VS Code (Left 50%) & Terminal (Right 50%)
-                action_res = SystemAutomation.execute_intent("tile_windows", {"apps": ["Visual Studio Code", "Terminal"]})
+                # 1. Open GitHub URL in Browser
+                SystemAutomation.execute_intent("open_url", {"url": "github.com"})
+                # 2. Tile: [1] VS Code (Left 50%), [2] Terminal (Top-Right 25%), [3] Browser/Chrome/Safari (Bottom-Right 25%)
+                browser_app = "Google Chrome" if sys.platform == "darwin" else "chrome"
+                action_res = SystemAutomation.execute_intent("tile_windows", {"apps": ["Visual Studio Code", "Terminal", browser_app]})
             elif action == "terminate_system":
+
                 action_res = {"terminate": True}
             else:
                 action_res = SystemAutomation.execute_intent(action, params)
