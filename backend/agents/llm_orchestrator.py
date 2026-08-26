@@ -77,11 +77,19 @@ RULES:
             "telegram": "Telegram",
             "zoom": "zoom.us",
             "figma": "Figma",
-            "notion": "Notion"
+            "notion": "Notion",
+            # Devanagari Hindi app names
+            "स्पॉटिफाई": "Spotify", "स्पोटिफाई": "Spotify",
+            "फोटोस": "Photos", "फ़ोटो": "Photos", "फोटो": "Photos",
+            "अप स्टोर": "App Store", "एप स्टोर": "App Store", "ऐप स्टोर": "App Store",
+            "नोटेशन": "Notion", "नोशन": "Notion",
+            "क्रोम": "Google Chrome", "गूगल क्रोम": "Google Chrome",
+            "वीएस कोड": "Visual Studio Code", "कोड": "Visual Studio Code",
+            "टर्मिनल": "Terminal", "सफारी": "Safari", "कैलकुलेटर": "Calculator"
         }
 
         # 1. Termination (English & Hindi)
-        if any(w in text_lower for w in ["terminate the system", "terminate system", "shutdown system", "exit system", "system band kardo", "band kar do", "alvida friday", "terminate"]):
+        if any(w in text_lower for w in ["terminate the system", "terminate system", "shutdown system", "exit system", "system band kardo", "band kar do", "alvida friday", "terminate", "सिस्टम बंद"]):
             reply = "System band kar rahi hoon. Alvida sir." if is_hindi else "Terminating system. Goodbye sir."
             return {
                 "action": "terminate_system",
@@ -90,34 +98,38 @@ RULES:
             }
 
         # 2. Positional Tiling Intent (e.g. "chrome left me dalo, vs code top right me, terminal bottom right me")
-        has_pos_keyword = any(w in text_lower for w in ["top right", "top left", "bottom right", "bottom left", "left me", "right me", "left side", "right side", "upar", "neeche"])
+        has_pos_keyword = any(w in text_lower for w in [
+            "top right", "top left", "bottom right", "bottom left", "left me", "right me", "left side", "right side", "upar", "neeche",
+            "टॉप लेफ्ट", "टॉप राइट", "टॉप राईट", "बॉटम लेफ्ट", "बॉटम राइट", "बॉटम राईट", "लेफ्ट में", "राइट में", "ऊपर", "नीचे", "डालो", "टाइल"
+        ])
         if has_pos_keyword:
             slots = {}
             for app_key, app_val in app_map.items():
                 if app_key in text_lower:
                     idx = text_lower.find(app_key)
                     # Look at context around the app name
-                    context = text_lower[max(0, idx - 25):min(len(text_lower), idx + len(app_key) + 25)]
-                    if "top right" in context or "upar right" in context:
+                    context = text_lower[max(0, idx - 30):min(len(text_lower), idx + len(app_key) + 30)]
+                    if any(k in context for k in ["top right", "top right me", "upar right", "टॉप राइट", "टॉप राईट", "ऊपर राइट"]):
                         slots["top_right"] = app_val
-                    elif "top left" in context or "upar left" in context:
+                    elif any(k in context for k in ["top left", "top left me", "upar left", "टॉप लेफ्ट", "ऊपर लेफ्ट"]):
                         slots["top_left"] = app_val
-                    elif "bottom right" in context or "neeche right" in context:
+                    elif any(k in context for k in ["bottom right", "bottom right me", "neeche right", "बॉटम राइट", "बॉटम राईट", "नीचे राइट"]):
                         slots["bottom_right"] = app_val
-                    elif "bottom left" in context or "neeche left" in context:
+                    elif any(k in context for k in ["bottom left", "bottom left me", "neeche left", "बॉटम लेफ्ट", "नीचे लेफ्ट"]):
                         slots["bottom_left"] = app_val
-                    elif "left" in context or "bayein" in context:
+                    elif any(k in context for k in ["left", "bayein", "लेफ्ट", "बाएं"]):
                         slots["left"] = app_val
-                    elif "right" in context or "dayein" in context:
+                    elif any(k in context for k in ["right", "dayein", "राइट", "दाईं"]):
                         slots["right"] = app_val
 
-            if slots:
+            if slots and len(slots) >= 2:
                 spoken = "Aapke bataye hisaab se windows tile kar diye hain." if is_hindi else "Positionally tiled your applications."
                 return {
                     "action": "tile_positions",
                     "params": {"positions": slots},
                     "spoken_reply": spoken
                 }
+
 
         # 3. Plain Multi-App Tiling (e.g. "tile chrome and vs code", "tile terminal spotify chrome", "split screen vs code and terminal")
         if any(w in text_lower for w in ["tile", "split screen", "side by side", "tile karo", "screen split", "arrange windows"]):
