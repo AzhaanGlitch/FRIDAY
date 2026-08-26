@@ -64,7 +64,7 @@ export const App: React.FC = () => {
     setStatusText('LISTENING FOR COMMAND...');
 
     try {
-      const data = await fetch('http://localhost:8000/api/listen-mic?duration=7', { method: 'POST' }).then(r => r.json());
+      const data = await fetch('http://localhost:8000/api/listen-mic?duration=5', { method: 'POST' }).then(r => r.json());
 
       if (!isRunningRef.current) { loopActiveRef.current = false; return; }
 
@@ -88,7 +88,7 @@ export const App: React.FC = () => {
         setVoiceState('speaking');
         setStatusText(`FRIDAY: "${text}"`);
 
-        const speakDuration = data.tts_duration_ms || Math.max(3500, text.length * 65);
+        const speakDuration = data.tts_duration_ms || Math.max(1200, text.length * 45);
         await new Promise(resolve => setTimeout(resolve, speakDuration));
 
         if (isRunningRef.current) {
@@ -119,43 +119,92 @@ export const App: React.FC = () => {
 
   return (
     <div className="jarvis-container">
-      {/* HUD Status Text Display */}
-      <div style={{
-        position: 'absolute',
-        top: '40px',
-        textAlign: 'center',
-        color: voiceState === 'speaking' ? '#a855f7' : voiceState === 'listening' ? '#00f2ff' : voiceState === 'terminated' ? '#ef4444' : '#3b82f6',
-        fontFamily: 'Space Grotesk, sans-serif',
-        letterSpacing: '2px',
-        fontSize: '14px',
-        textTransform: 'uppercase',
-        textShadow: '0 0 10px currentColor',
-        zIndex: 10
-      }}>
-        {statusText}
-      </div>
-
-      {/* Iron Man F.R.I.D.A.Y. Reactive Core HUD Orb — no onClick to prevent duplicate loops */}
-      <div className={`jarvis-core ${voiceState}`} style={{ cursor: 'default' }}>
-        {/* Core Nucleus */}
-        <div className="core-nucleus"></div>
-
-        {/* Inner Arc Reactor Node Ring */}
-        <div className="inner-node-ring">
-          {[...Array(12)].map((_, i) => (
-            <div key={i} className="node-segment" style={{ transform: `rotate(${i * 30}deg) translateY(-44px)` }} />
-          ))}
+      {/* 3D Orbital Loader AI Core */}
+      <div className={`orbital-loader ${voiceState}`} style={{ cursor: 'default' }}>
+        <div className="core-system">
+          <div className="core-micro-center"></div>
+          <div className="core-inner-glow"></div>
+          <div className="core-thin-ring"></div>
+          <div className="core-secondary-ring"></div>
+          <div className="core-outer-ring"></div>
+          <div className="core-halo"></div>
         </div>
 
-        {/* Rotating Arc Rings */}
-        <div className="ring ring-outer-1"></div>
-        <div className="ring ring-outer-2"></div>
-        <div className="ring ring-outer-3"></div>
+        <div className="pulse-system">
+          <div className="pulse-ring pulse-ring-1"></div>
+          <div className="pulse-ring pulse-ring-2"></div>
+          <div className="pulse-ring pulse-ring-3"></div>
+        </div>
 
-        {/* Frequency Sound Wave Pulses */}
-        <div className="wave-pulse wave-1"></div>
-        <div className="wave-pulse wave-2"></div>
-        <div className="wave-pulse wave-3"></div>
+        <div className="orbit-system">
+          <div className="orbit-1">
+            <div className="orbit-path"></div>
+            <div className="orbit-object-wrapper">
+              <div className="orbit-object obj-circle"></div>
+              <div className="object-trail"></div>
+            </div>
+          </div>
+          <div className="orbit-2">
+            <div className="orbit-path"></div>
+            <div className="orbit-object-wrapper">
+              <div className="orbit-object obj-ring"></div>
+            </div>
+          </div>
+          <div className="orbit-3">
+            <div className="orbit-path"></div>
+            <div className="orbit-object-wrapper">
+              <div className="orbit-object obj-bright-point"></div>
+            </div>
+          </div>
+          <div className="orbit-4">
+            <div className="orbit-path"></div>
+            <div className="orbit-object-wrapper">
+              <div className="orbit-object obj-diamond"></div>
+            </div>
+          </div>
+          <div className="orbit-5">
+            <div className="orbit-path"></div>
+            <div className="orbit-object-wrapper">
+              <div className="orbit-object obj-line"></div>
+            </div>
+          </div>
+          <div className="orbit-6">
+            <div className="orbit-path"></div>
+            <div className="orbit-object-wrapper">
+              <div className="orbit-object obj-square"></div>
+            </div>
+          </div>
+          <div className="orbit-7">
+            <div className="orbit-path"></div>
+            <div className="orbit-object-wrapper">
+              <div className="orbit-object obj-fragment"></div>
+            </div>
+          </div>
+        </div>
+
+        <div className="particle-system">
+          <div className="particle p1"></div>
+          <div className="particle p2"></div>
+          <div className="particle p3"></div>
+          <div className="particle p4"></div>
+          <div className="particle p5"></div>
+          <div className="particle p6"></div>
+          <div className="particle p7"></div>
+          <div className="particle p8"></div>
+          <div className="particle p9"></div>
+          <div className="particle p10"></div>
+          <div className="particle p11"></div>
+          <div className="particle p12"></div>
+          <div className="particle p13"></div>
+          <div className="particle p14"></div>
+          <div className="particle p15"></div>
+        </div>
+
+        <div className="energy-fragments">
+          <div className="energy-fragment ef1"></div>
+          <div className="energy-fragment ef2"></div>
+          <div className="energy-fragment ef3"></div>
+        </div>
       </div>
     </div>
   );

@@ -1,7 +1,8 @@
 :root {
   --bg-pitch-black: #000000;
-  --cyan-core: #00f2ff;
-  --blue-arc: #0088ff;
+  --white-core: #ffffff;
+  --gold-core: #ffd700;
+  --gold-glow: #f59e0b;
   --purple-arc: #a855f7;
 }
 
@@ -32,189 +33,679 @@ html, body {
   overflow: hidden;
 }
 
-/* 2. Iron Man / F.R.I.D.A.Y. Arc Reactor Core HUD */
-.jarvis-core {
+/* 2. 3D Orbital Loader Core (Increased Size & Enhanced Visibility) */ 
+.orbital-loader {
   position: relative;
-  width: 240px;
-  height: 240px;
+  width: 480px;
+  height: 480px;
+  margin: auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.4s ease;
+  background: transparent;
+  perspective: 1000px;
+  transform-style: preserve-3d;
+  box-sizing: border-box;
+  transition: transform 0.4s ease, filter 0.4s ease;
 }
 
-/* Core Nucleus Glow */
-.core-nucleus {
+.orbital-loader *,
+.orbital-loader *::before,
+.orbital-loader *::after {
+  box-sizing: border-box;
+  transform-style: preserve-3d;
+}
+
+.core-system {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: coreMasterCycle 12s ease-in-out infinite;
+}
+
+.core-micro-center {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background-color: #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 0 16px 4px rgba(255, 255, 255, 0.95);
+  animation: corePulse 3s ease-in-out infinite alternate;
+}
+
+.core-inner-glow {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.95) 0%,
+    rgba(240, 240, 255, 0.5) 60%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: coreBreathe 2.41s ease-in-out infinite alternate;
+}
+
+.core-thin-ring {
+  position: absolute;
+  width: 36px;
+  height: 36px;
+  border: 1.5px solid rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+  animation: coreRingRotate 4.12s linear infinite;
+}
+
+.core-secondary-ring {
+  position: absolute;
   width: 60px;
   height: 60px;
+  border: 1.5px dashed rgba(255, 255, 255, 0.7);
   border-radius: 50%;
-  background: radial-gradient(circle, #ffffff 0%, var(--cyan-core) 60%, var(--blue-arc) 100%);
-  box-shadow: 0 0 40px var(--cyan-core), inset 0 0 20px #ffffff;
-  z-index: 5;
-  transition: all 0.3s ease;
+  animation: coreRingRotateReverse 6.28s linear infinite;
 }
 
-/* Inner Node Ring (Arc Reactor Segments) */
-.inner-node-ring {
+.core-outer-ring {
   position: absolute;
-  width: 110px;
-  height: 110px;
+  width: 88px;
+  height: 88px;
+  border: 1.5px solid rgba(255, 255, 255, 0.5);
+  border-top-color: rgba(255, 255, 255, 0.95);
   border-radius: 50%;
-  z-index: 4;
-  animation: rotateClockwise 12s linear infinite;
+  animation: coreRingRotate 9.14s linear infinite;
 }
 
-.node-segment {
+.core-halo {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.25) 0%,
+    rgba(255, 255, 255, 0) 75%
+  );
+  animation: coreFluctuate 5.18s ease-in-out infinite alternate;
+}
+
+.pulse-system {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pulse-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.8);
+  opacity: 0;
+  width: 8px;
+  height: 8px;
+}
+
+.pulse-ring-1 {
+  animation: shockwavePulse 8s cubic-bezier(0.1, 0.8, 0.3, 1) infinite;
+}
+
+.pulse-ring-2 {
+  animation: shockwavePulse 8s cubic-bezier(0.1, 0.8, 0.3, 1) infinite 2s;
+}
+
+.pulse-ring-3 {
+  animation: shockwavePulse 8s cubic-bezier(0.1, 0.8, 0.3, 1) infinite 4s;
+}
+
+.orbit-system {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.orbit-path {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.orbit-object-wrapper {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+}
+
+.orbit-object {
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  transform: translate(-50%, -50%);
+}
+
+.orbit-1 {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 4px;
-  height: 10px;
-  background: var(--cyan-core);
-  box-shadow: 0 0 8px var(--cyan-core);
-  border-radius: 2px;
-  margin-left: -2px;
-  margin-top: -5px;
+  width: 240px;
+  height: 240px;
+  margin-top: -120px;
+  margin-left: -120px;
+  animation: orbitMaster1 18s linear infinite;
 }
 
-/* HUD Arc Rings */
-.ring {
-  position: absolute;
+.orbit-1 .orbit-path {
+  border: 1.5px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.35);
+  background: radial-gradient(
+    circle,
+    transparent 60%,
+    rgba(255, 255, 255, 0.05) 100%
+  );
+}
+
+.orbit-1 .orbit-object-wrapper {
+  animation: spinClockwise 3.73s linear infinite;
+}
+
+.orbit-1 .obj-circle {
+  width: 7px;
+  height: 7px;
+  background-color: #ffffff;
   border-radius: 50%;
-  pointer-events: none;
-  border: 1.5px dashed rgba(0, 242, 255, 0.4);
+  box-shadow: 0 0 10px #ffffff;
 }
 
-.ring-outer-1 {
-  inset: -15px;
-  border: 2px solid rgba(0, 242, 255, 0.3);
-  border-top-color: var(--cyan-core);
-  border-bottom-color: var(--cyan-core);
-  animation: rotateClockwise 8s linear infinite;
-}
-
-.ring-outer-2 {
-  inset: -35px;
-  border: 1.5px dashed rgba(0, 136, 255, 0.5);
-  animation: rotateCounterClockwise 14s linear infinite;
-}
-
-.ring-outer-3 {
-  inset: -55px;
-  border: 2px dotted rgba(0, 242, 255, 0.25);
-  animation: rotateClockwise 20s linear infinite;
-}
-
-/* Wave Sound Pulses */
-.wave-pulse {
+.orbit-1 .object-trail {
   position: absolute;
-  inset: 0;
+  top: 50%;
+  left: 100%;
+  width: 24px;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.8), transparent);
+  transform-origin: left center;
+  transform: translateY(-50%) rotate(180deg);
+}
+
+.orbit-2 {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 320px;
+  height: 320px;
+  margin-top: -160px;
+  margin-left: -160px;
+  animation: orbitMaster2 22s linear infinite;
+}
+
+.orbit-2 .orbit-path {
+  border: 1.5px solid rgba(240, 240, 255, 0.6);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
+}
+
+.orbit-2 .orbit-object-wrapper {
+  animation: spinCounterClockwise 5.18s linear infinite;
+}
+
+.orbit-2 .obj-ring {
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid rgba(255, 255, 255, 0.9);
   border-radius: 50%;
-  border: 2px solid var(--cyan-core);
-  opacity: 0;
+  animation: keepUpright2 5.18s linear infinite;
+}
+
+.orbit-3 {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 150px;
+  height: 150px;
+  margin-top: -75px;
+  margin-left: -75px;
+  animation: orbitMaster3 14s linear infinite;
+}
+
+.orbit-3 .orbit-path {
+  border: 1.5px dashed rgba(255, 255, 255, 0.75);
+}
+
+.orbit-3 .orbit-object-wrapper {
+  animation: spinClockwise 2.31s linear infinite;
+}
+
+.orbit-3 .obj-bright-point {
+  width: 6px;
+  height: 6px;
+  background-color: #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 0 10px 2px #ffffff;
+}
+
+.orbit-4 {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 380px;
+  height: 380px;
+  margin-top: -190px;
+  margin-left: -190px;
+  animation: orbitMaster4 26s linear infinite;
+}
+
+.orbit-4 .orbit-path {
+  border: 1.5px solid rgba(255, 255, 255, 0.5);
+}
+
+.orbit-4 .orbit-object-wrapper {
+  animation: spinCounterClockwise 9.26s linear infinite;
+}
+
+.orbit-4 .obj-diamond {
+  width: 7px;
+  height: 7px;
+  background-color: rgba(255, 255, 255, 0.95);
+  transform: translate(-50%, -50%) rotate(45deg);
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.8);
+}
+
+.orbit-5 {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 290px;
+  height: 290px;
+  margin-top: -145px;
+  margin-left: -145px;
+  animation: orbitMaster5 20s linear infinite;
+}
+
+.orbit-5 .orbit-path {
+  border: 1.5px solid rgba(255, 255, 255, 0.6);
+  border-left-color: rgba(255, 255, 255, 0.95);
+}
+
+.orbit-5 .orbit-object-wrapper {
+  animation: spinCounterClockwise 7.87s linear infinite;
+}
+
+.orbit-5 .obj-line {
+  width: 10px;
+  height: 2px;
+  background-color: #ffffff;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.9);
+  animation: selfRotate 3.1s linear infinite;
+}
+
+.orbit-6 {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 350px;
+  height: 350px;
+  margin-top: -175px;
+  margin-left: -175px;
+  animation: orbitMaster6 24s linear infinite;
+}
+
+.orbit-6 .orbit-path {
+  border: 1.5px solid rgba(255, 255, 255, 0.5);
+  border-top: 1.5px solid rgba(255, 255, 255, 0.9);
+}
+
+.orbit-6 .orbit-object-wrapper {
+  animation: spinClockwise 11.13s linear infinite;
+}
+
+.orbit-6 .obj-square {
+  width: 6px;
+  height: 6px;
+  background-color: rgba(255, 255, 255, 0.95);
+  animation: keepUpright6 11.13s linear infinite;
+}
+
+.orbit-7 {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 420px;
+  height: 360px;
+  margin-top: -180px;
+  margin-left: -210px;
+  animation: orbitMaster7 28s linear infinite;
+}
+
+.orbit-7 .orbit-path {
+  border: 2px double rgba(255, 255, 255, 0.7);
+}
+
+.orbit-7 .orbit-object-wrapper {
+  animation: spinCounterClockwise 13.62s linear infinite;
+}
+
+.orbit-7 .obj-fragment {
+  width: 8px;
+  height: 7px;
+  background-color: rgba(255, 255, 255, 0.9);
+  clip-path: polygon(0% 0%, 100% 20%, 80% 100%, 10% 70%);
+  animation: selfRotate 4.5s linear infinite reverse;
+}
+
+.particle-system {
+  position: absolute;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
 }
 
-/* Standby / Wakeword State */
-.jarvis-core.wakeword .core-nucleus {
-  background: radial-gradient(circle, #ffffff 0%, var(--blue-arc) 70%, #000000 100%);
-  box-shadow: 0 0 25px var(--blue-arc), inset 0 0 15px #ffffff;
-  animation: standbyPulse 3s infinite ease-in-out;
+.particle {
+  position: absolute;
+  background-color: rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+  animation: particleFloat 6s ease-in-out infinite alternate;
 }
 
-/* Terminated State */
-.jarvis-core.terminated .core-nucleus {
-  background: #ef4444;
-  box-shadow: 0 0 40px #ef4444;
+.p1 { width: 3px; height: 3px; top: 22%; left: 30%; animation-delay: 0.2s; opacity: 0.6; }
+.p2 { width: 4px; height: 4px; top: 75%; left: 20%; animation-delay: 1.1s; opacity: 0.7; }
+.p3 { width: 2px; height: 2px; top: 15%; left: 70%; animation-delay: 0.7s; opacity: 0.5; }
+.p4 { width: 4px; height: 4px; top: 80%; left: 75%; animation-delay: 2.3s; opacity: 0.6; }
+.p5 { width: 3px; height: 3px; top: 45%; left: 12%; animation-delay: 1.8s; opacity: 0.7; }
+.p6 { width: 2px; height: 2px; top: 50%; left: 88%; animation-delay: 3.1s; opacity: 0.5; }
+.p7 { width: 4px; height: 4px; top: 32%; left: 82%; animation-delay: 0.4s; opacity: 0.8; box-shadow: 0 0 6px #fff; }
+.p8 { width: 2px; height: 2px; top: 68%; left: 35%; animation-delay: 2.9s; opacity: 0.5; }
+.p9 { width: 3px; height: 3px; top: 88%; left: 45%; animation-delay: 1.4s; opacity: 0.6; }
+.p10 { width: 4px; height: 4px; top: 10%; left: 48%; animation-delay: 3.5s; opacity: 0.7; }
+.p11 { width: 2px; height: 2px; top: 38%; left: 25%; animation-delay: 0.9s; opacity: 0.5; }
+.p12 { width: 3px; height: 3px; top: 62%; left: 78%; animation-delay: 2.1s; opacity: 0.6; }
+.p13 { width: 4px; height: 4px; top: 28%; left: 60%; animation-delay: 1.6s; opacity: 0.5; }
+.p14 { width: 2px; height: 2px; top: 72%; left: 58%; animation-delay: 3.8s; opacity: 0.5; }
+.p15 { width: 4px; height: 4px; top: 55%; left: 18%; animation-delay: 2.7s; opacity: 0.7; }
+
+.energy-fragments {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }
 
-@keyframes standbyPulse {
-  0% { transform: scale(0.95); opacity: 0.7; }
-  50% { transform: scale(1.05); opacity: 1; }
-  100% { transform: scale(0.95); opacity: 0.7; }
+.energy-fragment {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  background-color: rgba(255, 255, 255, 0.95);
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
 }
 
-/* 3. Voice States: Listening Wave Animation */
-.jarvis-core.listening .core-nucleus {
+.ef1 { top: 50%; left: 50%; animation: energyFragmentMotion1 14s ease-in-out infinite; }
+.ef2 { top: 50%; left: 50%; animation: energyFragmentMotion2 14s ease-in-out infinite; }
+.ef3 { top: 50%; left: 50%; animation: energyFragmentMotion3 14s ease-in-out infinite; }
 
-  box-shadow: 0 0 60px var(--cyan-core), inset 0 0 30px #ffffff;
-  transform: scale(1.1);
+/* 3. FRIDAY Voice Reactive State Modifiers for Orbital Loader */
+
+/* Standby / Wakeword State (White theme on Launch & Standby) */
+.orbital-loader.wakeword,
+.orbital-loader.idle {
+  filter: drop-shadow(0 0 25px rgba(255, 255, 255, 0.8));
+}
+.orbital-loader.wakeword .core-micro-center,
+.orbital-loader.idle .core-micro-center {
+  background-color: #ffffff;
+  box-shadow: 0 0 18px 6px #ffffff;
+}
+.orbital-loader.wakeword .core-inner-glow,
+.orbital-loader.idle .core-inner-glow {
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 1) 0%,
+    rgba(220, 240, 255, 0.6) 60%,
+    rgba(255, 255, 255, 0) 100%
+  );
 }
 
-.jarvis-core.listening .wave-1 {
-  animation: wavePulse 2.2s infinite ease-out;
+/* Listening State (Rich Golden Theme while Listening) */
+.orbital-loader.listening {
+  transform: scale(1.18);
+  filter: drop-shadow(0 0 45px rgba(255, 215, 0, 0.95));
+}
+.orbital-loader.listening .core-micro-center {
+  background-color: #ffffff;
+  box-shadow: 0 0 24px 7px #ffd700;
+}
+.orbital-loader.listening .core-inner-glow {
+  background: radial-gradient(
+    circle,
+    #ffffff 0%,
+    #ffd700 60%,
+    #d97706 100%
+  );
+}
+.orbital-loader.listening .core-halo {
+  background: radial-gradient(
+    circle,
+    rgba(255, 215, 0, 0.45) 0%,
+    rgba(255, 255, 255, 0) 75%
+  );
+}
+.orbital-loader.listening .orbit-path {
+  border-color: rgba(255, 215, 0, 0.9) !important;
+  box-shadow: 0 0 12px rgba(255, 215, 0, 0.4);
+}
+.orbital-loader.listening .particle {
+  background-color: rgba(255, 215, 0, 0.9);
+}
+.orbital-loader.listening .energy-fragment {
+  background-color: #ffd700;
+  box-shadow: 0 0 10px #ffd700;
 }
 
-.jarvis-core.listening .wave-2 {
-  animation: wavePulse 2.2s infinite ease-out 0.7s;
+/* Speaking State (Purple/Cyan Audio Frequency Surge) */
+.orbital-loader.speaking {
+  transform: scale(1.25);
+  filter: drop-shadow(0 0 50px rgba(168, 85, 247, 1));
+}
+.orbital-loader.speaking .core-micro-center {
+  background-color: #ffffff;
+  box-shadow: 0 0 24px 6px var(--purple-arc);
+}
+.orbital-loader.speaking .orbit-path {
+  border-color: rgba(168, 85, 247, 0.85) !important;
 }
 
-.jarvis-core.listening .wave-3 {
-  animation: wavePulse 2.2s infinite ease-out 1.4s;
+/* Terminated State (Red) */
+.orbital-loader.terminated {
+  filter: drop-shadow(0 0 40px rgba(239, 68, 68, 0.9));
+}
+.orbital-loader.terminated .core-micro-center {
+  background-color: #ef4444;
+  box-shadow: 0 0 18px 5px #ef4444;
 }
 
-/* 4. Voice States: Speaking Wave Animation (Intense Purple/Cyan High Frequency Waves) */
-.jarvis-core.speaking .core-nucleus {
-  background: radial-gradient(circle, #ffffff 0%, var(--purple-arc) 50%, var(--cyan-core) 100%);
-  box-shadow: 0 0 90px var(--purple-arc), inset 0 0 40px #ffffff;
-  animation: corePulseSpeaking 0.5s infinite alternate;
+/* Keyframe Animations — Continuous Rotation Without Collapse */
+@keyframes spinClockwise {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
-.jarvis-core.speaking .node-segment {
-  background: var(--purple-arc);
-  box-shadow: 0 0 12px var(--purple-arc);
+@keyframes spinCounterClockwise {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(-360deg); }
 }
 
-.jarvis-core.speaking .ring-outer-1 {
-  border-top-color: var(--purple-arc);
-  border-bottom-color: var(--purple-arc);
-  animation-duration: 3s;
+@keyframes selfRotate {
+  0% { transform: translate(-50%, -50%) rotate(0deg); }
+  100% { transform: translate(-50%, -50%) rotate(360deg); }
 }
 
-.jarvis-core.speaking .wave-1 {
-  border-color: var(--purple-arc);
-  animation: wavePulse 1.2s infinite ease-out;
+@keyframes keepUpright2 {
+  0% { transform: translate(-50%, -50%) rotate(0deg); }
+  100% { transform: translate(-50%, -50%) rotate(360deg); }
 }
 
-.jarvis-core.speaking .wave-2 {
-  border-color: var(--cyan-core);
-  animation: wavePulse 1.2s infinite ease-out 0.4s;
+@keyframes keepUpright6 {
+  0% { transform: translate(-50%, -50%) rotate(0deg); }
+  100% { transform: translate(-50%, -50%) rotate(-360deg); }
 }
 
-.jarvis-core.speaking .wave-3 {
-  border-color: var(--purple-arc);
-  animation: wavePulse 1.2s infinite ease-out 0.8s;
+@keyframes corePulse {
+  0% { transform: scale(0.85); opacity: 0.8; }
+  100% { transform: scale(1.3); opacity: 1; box-shadow: 0 0 16px 4px rgba(255, 255, 255, 1); }
 }
 
-/* Keyframe Animations */
-@keyframes rotateClockwise {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+@keyframes coreBreathe {
+  0% { transform: scale(0.9); opacity: 0.5; }
+  100% { transform: scale(1.5); opacity: 1; }
 }
 
-@keyframes rotateCounterClockwise {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(-360deg); }
+@keyframes coreFluctuate {
+  0% { transform: scale(0.8) rotate(0deg); opacity: 0.3; }
+  50% { opacity: 0.7; }
+  100% { transform: scale(1.25) rotate(180deg); opacity: 0.4; }
 }
 
-@keyframes wavePulse {
-  0% {
-    transform: scale(0.8);
-    opacity: 0.8;
+@keyframes coreRingRotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes coreRingRotateReverse {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(-360deg); }
+}
+
+@keyframes particleFloat {
+  0% { transform: translate(0, 0) scale(0.8); }
+  50% { transform: translate(6px, -8px) scale(1.3); }
+  100% { transform: translate(-5px, 6px) scale(0.9); }
+}
+
+@keyframes shockwavePulse {
+  0% { width: 8px; height: 8px; opacity: 0; border-width: 2px; }
+  10% { opacity: 0.9; border-color: rgba(0, 242, 255, 1); border-width: 2px; }
+  60% { width: 440px; height: 440px; opacity: 0; border-color: rgba(0, 242, 255, 0.4); border-width: 1px; }
+  100% { opacity: 0; }
+}
+
+@keyframes coreMasterCycle {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.06); filter: brightness(1.2); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes orbitMaster1 {
+  0% { transform: rotateX(68deg) rotateY(12deg) rotateZ(0deg) scale(1); opacity: 1; }
+  50% { transform: rotateX(68deg) rotateY(12deg) rotateZ(180deg) scale(1.02); opacity: 1; }
+  100% { transform: rotateX(68deg) rotateY(12deg) rotateZ(360deg) scale(1); opacity: 1; }
+}
+
+@keyframes orbitMaster2 {
+  0% { transform: rotateX(58deg) rotateY(-28deg) rotateZ(25deg) scale(1); opacity: 0.9; }
+  50% { transform: rotateX(58deg) rotateY(-28deg) rotateZ(205deg) scale(1.03); opacity: 0.9; }
+  100% { transform: rotateX(58deg) rotateY(-28deg) rotateZ(385deg) scale(1); opacity: 0.9; }
+}
+
+@keyframes orbitMaster3 {
+  0% { transform: rotateX(76deg) rotateY(38deg) rotateZ(-15deg) scale(1); opacity: 1; }
+  50% { transform: rotateX(76deg) rotateY(38deg) rotateZ(165deg) scale(1.04); opacity: 1; }
+  100% { transform: rotateX(76deg) rotateY(38deg) rotateZ(345deg) scale(1); opacity: 1; }
+}
+
+@keyframes orbitMaster4 {
+  0% { transform: rotateX(42deg) rotateY(-52deg) rotateZ(40deg) scale(1); opacity: 0.85; }
+  50% { transform: rotateX(42deg) rotateY(-52deg) rotateZ(220deg) scale(1.02); opacity: 0.85; }
+  100% { transform: rotateX(42deg) rotateY(-52deg) rotateZ(400deg) scale(1); opacity: 0.85; }
+}
+
+@keyframes orbitMaster5 {
+  0% { transform: rotateX(62deg) rotateY(65deg) rotateZ(-45deg) scale(1); opacity: 0.9; }
+  50% { transform: rotateX(62deg) rotateY(65deg) rotateZ(135deg) scale(1.03); opacity: 0.9; }
+  100% { transform: rotateX(62deg) rotateY(65deg) rotateZ(315deg) scale(1); opacity: 0.9; }
+}
+
+@keyframes orbitMaster6 {
+  0% { transform: rotateX(84deg) rotateY(-78deg) rotateZ(10deg) scale(1); opacity: 0.8; }
+  50% { transform: rotateX(84deg) rotateY(-78deg) rotateZ(190deg) scale(1.02); opacity: 0.8; }
+  100% { transform: rotateX(84deg) rotateY(-78deg) rotateZ(370deg) scale(1); opacity: 0.8; }
+}
+
+@keyframes orbitMaster7 {
+  0% { transform: rotateX(48deg) rotateY(22deg) rotateZ(-65deg) skewX(8deg) scale(1); opacity: 0.85; }
+  50% { transform: rotateX(48deg) rotateY(22deg) rotateZ(115deg) skewX(8deg) scale(1.03); opacity: 0.85; }
+  100% { transform: rotateX(48deg) rotateY(22deg) rotateZ(295deg) skewX(8deg) scale(1); opacity: 0.85; }
+}
+
+@keyframes energyFragmentMotion1 {
+  0% { transform: translate(-50%, -50%) translate(-60px, -40px) scale(0.8); opacity: 0.4; }
+  50% { transform: translate(-50%, -50%) translate(-90px, 50px) scale(1.2); opacity: 0.9; }
+  100% { transform: translate(-50%, -50%) translate(-60px, -40px) scale(0.8); opacity: 0.4; }
+}
+
+@keyframes energyFragmentMotion2 {
+  0% { transform: translate(-50%, -50%) translate(80px, 30px) scale(1); opacity: 0.5; }
+  50% { transform: translate(-50%, -50%) translate(50px, -80px) scale(1.3); opacity: 0.9; }
+  100% { transform: translate(-50%, -50%) translate(80px, 30px) scale(1); opacity: 0.5; }
+}
+
+@keyframes energyFragmentMotion3 {
+  0% { transform: translate(-50%, -50%) translate(20px, -90px) scale(0.7); opacity: 0.5; }
+  50% { transform: translate(-50%, -50%) translate(-60px, 70px) scale(1.4); opacity: 0.95; }
+  100% { transform: translate(-50%, -50%) translate(20px, -90px) scale(0.7); opacity: 0.5; }
+}
+
+.orbital-loader:hover .core-micro-center {
+  box-shadow: 0 0 20px 6px rgba(255, 255, 255, 1);
+  transform: scale(1.4);
+}
+
+.orbital-loader:hover .core-halo {
+  background: radial-gradient(
+    circle,
+    rgba(0, 242, 255, 0.4) 0%,
+    rgba(255, 255, 255, 0) 75%
+  );
+}
+
+.orbital-loader:hover .orbit-path {
+  border-color: rgba(0, 242, 255, 0.85);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .core-system,
+  .pulse-ring-1,
+  .pulse-ring-2,
+  .pulse-ring-3,
+  .orbit-1,
+  .orbit-2,
+  .orbit-3,
+  .orbit-4,
+  .orbit-5,
+  .orbit-6,
+  .orbit-7,
+  .orbit-object-wrapper,
+  .obj-line,
+  .obj-fragment,
+  .particle,
+  .energy-fragment,
+  .core-micro-center,
+  .core-inner-glow,
+  .core-thin-ring,
+  .core-secondary-ring,
+  .core-outer-ring,
+  .core-halo {
+    animation: none !important;
   }
-  100% {
-    transform: scale(2.2);
-    opacity: 0;
-  }
-}
 
-@keyframes corePulseSpeaking {
-  0% {
-    transform: scale(1);
-    box-shadow: 0 0 60px var(--purple-arc), inset 0 0 25px #ffffff;
-  }
-  100% {
-    transform: scale(1.3);
-    box-shadow: 0 0 120px var(--cyan-core), inset 0 0 50px #ffffff;
+  .orbital-loader {
+    perspective: none;
   }
 }
