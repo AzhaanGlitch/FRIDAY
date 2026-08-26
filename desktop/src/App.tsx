@@ -137,12 +137,10 @@ export const App: React.FC = () => {
         zIndex: 50,
         textShadow: '0 1px 3px rgba(0,0,0,0.9)'
       }}>
-        <span style={{ color: voiceState === 'speaking' ? '#c084fc' : voiceState === 'listening' ? '#00f2ff' : '#38bdf8', opacity: 0.9 }}>
-          ● FRIDAY_CORE ({voiceState.toUpperCase()}):
-        </span>{' '}
         {liveTranscript}
       </div>
     </div>
+
   );
 };
 
