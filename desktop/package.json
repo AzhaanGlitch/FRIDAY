@@ -13,13 +13,15 @@
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
+    "@types/three": "^0.185.4",
+    "framer-motion": "^13.1.1",
     "lucide-react": "^0.344.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "three": "^0.185.1"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",
-
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",
     "@vitejs/plugin-react": "^4.2.1",
