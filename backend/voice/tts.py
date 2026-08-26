@@ -9,6 +9,7 @@ import re
 # Active playback subprocess reference for instant barge-in kill
 _active_playback_proc = None
 _tts_lock = threading.Lock()
+_is_speaking_event = threading.Event()
 
 class VoiceTTS:
     """
@@ -21,10 +22,16 @@ class VoiceTTS:
     HINDI_VOICE = "hi-IN-SwaraNeural"              # Real human Hindi voice
 
     @classmethod
+    def is_speaking(cls) -> bool:
+        """Check if assistant voice is actively playing."""
+        return _is_speaking_event.is_set()
+
+    @classmethod
     def stop_speaking(cls):
         """Instant Barge-in Interrupt: Immediately kill active speech playback in <10ms."""
         global _active_playback_proc
         with _tts_lock:
+            _is_speaking_event.clear()
             if _active_playback_proc:
                 try:
                     _active_playback_proc.terminate()
@@ -91,6 +98,7 @@ class VoiceTTS:
 
             # 2. Play audio with low-latency native player (afplay on macOS)
             with _tts_lock:
+                _is_speaking_event.set()
                 if sys.platform == "darwin":
                     _active_playback_proc = subprocess.Popen(["afplay", temp_mp3_path])
                 else:
@@ -105,6 +113,7 @@ class VoiceTTS:
 
         finally:
             with _tts_lock:
+                _is_speaking_event.clear()
                 _active_playback_proc = None
             try:
                 if os.path.exists(temp_mp3_path):

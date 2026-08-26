@@ -41,6 +41,7 @@ const fragmentShader = /* glsl */ `
   uniform float innerRadius;
   uniform float pulseSpeed;
   uniform float pulseAmp;
+  uniform float voiceDistortion;
 
   // Dynamic state-based base palette colors
   uniform vec3 color0;
@@ -130,21 +131,23 @@ const fragmentShader = /* glsl */ `
     float len = length(uv);
     float invLen = len > 0.0 ? 1.0 / len : 0.0;
 
-    float pulse = sin(iTime * pulseSpeed) * pulseAmp;
+    // Synchronized Speech undulation & breathing pulse
+    float speechWave = sin(iTime * 14.0) * cos(iTime * 8.0) * voiceDistortion;
+    float pulse = (sin(iTime * pulseSpeed) * pulseAmp) + speechWave;
 
-    float n0 = snoise3(vec3(uv * noiseScale, iTime * 0.5)) * 0.5 + 0.5;
+    float n0 = snoise3(vec3(uv * (noiseScale + voiceDistortion * 0.4), iTime * (0.5 + voiceDistortion * 1.5))) * 0.5 + 0.5;
 
     float r0 = mix(mix(innerRadius + pulse, 1.0, 0.4), mix(innerRadius + pulse, 1.0, 0.6), n0);
 
     float d0 = distance(uv, (r0 * invLen) * uv);
-    float v0 = light1(1.0, 10.0, d0);
+    float v0 = light1(1.0 + voiceDistortion * 0.8, 10.0, d0);
     v0 *= smoothstep(r0 * 1.05, r0, len);
-    float cl = cos(atan(uv.y, uv.x) + iTime * 2.0) * 0.5 + 0.5;
+    float cl = cos(atan(uv.y, uv.x) + iTime * (2.0 + voiceDistortion * 3.0)) * 0.5 + 0.5;
 
     float a = iTime * -1.0;
     vec2 pos = vec2(cos(a), sin(a)) * r0;
     float d = distance(uv, pos);
-    float v1 = light2(1.5, 5.0, d);
+    float v1 = light2(1.5 + voiceDistortion * 1.2, 5.0, d);
     v1 *= light1(1.0, 50.0, d0);
 
     float v2 = smoothstep(1.0, mix(innerRadius, 1.0, n0 * 0.5), len);
@@ -244,6 +247,7 @@ export const GradientOrb: React.FC<{
       innerRadius: { value: config.innerRadius },
       pulseSpeed: { value: 1.5 },
       pulseAmp: { value: 0.02 },
+      voiceDistortion: { value: 0.0 },
       color0: { value: curC0 },
       color1: { value: curC1 },
       color2: { value: curC2 },
@@ -272,6 +276,7 @@ export const GradientOrb: React.FC<{
     const clock = new THREE.Clock();
     let reqId = 0;
     let currentRot = 0;
+    let currentVoiceDistortion = 0;
 
     const handleResize = () => {
       if (!container) return;
@@ -291,6 +296,7 @@ export const GradientOrb: React.FC<{
       let rotSpeed = config.rotationSpeed;
       let targetPulseSpeed = 1.5;
       let targetPulseAmp = 0.02;
+      let targetVoiceDistortion = 0.0;
 
       if (state === 'idle' || state === 'wakeword') {
         // White on Idle / Standby
@@ -298,32 +304,44 @@ export const GradientOrb: React.FC<{
         rotSpeed = 0.25;
         targetPulseSpeed = 1.2;
         targetPulseAmp = 0.015;
-      } else if (state === 'listening' || state === 'speaking') {
-        // Original Blue + Purple + Orange Gradient on Woken Up & Taking Commands
+        targetVoiceDistortion = 0.0;
+      } else if (state === 'listening') {
+        // Subtle ripple while listening to user
         targetPalette = activeGradientPalette;
-        rotSpeed = state === 'speaking' ? 0.9 : 0.55;
-        targetPulseSpeed = state === 'speaking' ? 5.5 : 3.2;
-        targetPulseAmp = state === 'speaking' ? 0.08 : 0.05;
+        rotSpeed = 0.55;
+        targetPulseSpeed = 3.0;
+        targetPulseAmp = 0.04;
+        targetVoiceDistortion = 0.03;
+      } else if (state === 'speaking') {
+        // Active Voice Speech Synchronized Fluid Wave Animation
+        targetPalette = activeGradientPalette;
+        rotSpeed = 1.2;
+        targetPulseSpeed = 7.0;
+        targetPulseAmp = 0.09;
+        targetVoiceDistortion = 0.12; // High expressive audio-wave rippling
       } else if (state === 'terminated') {
         // Red on Termination
         targetPalette = terminatedPalette;
         rotSpeed = 0.1;
         targetPulseSpeed = 0.8;
         targetPulseAmp = 0.01;
+        targetVoiceDistortion = 0.0;
       }
 
       // Smooth color transitions between palettes
-      curC0.lerp(targetPalette.c0, 0.06);
-      curC1.lerp(targetPalette.c1, 0.06);
-      curC2.lerp(targetPalette.c2, 0.06);
-      curC3.lerp(targetPalette.c3, 0.06);
+      curC0.lerp(targetPalette.c0, 0.08);
+      curC1.lerp(targetPalette.c1, 0.08);
+      curC2.lerp(targetPalette.c2, 0.08);
+      curC3.lerp(targetPalette.c3, 0.08);
 
+      currentVoiceDistortion += (targetVoiceDistortion - currentVoiceDistortion) * 0.1;
       currentRot += 0.01 * rotSpeed;
 
       uniforms.iTime.value = t;
       uniforms.rot.value = currentRot;
       uniforms.pulseSpeed.value = targetPulseSpeed;
       uniforms.pulseAmp.value = targetPulseAmp;
+      uniforms.voiceDistortion.value = currentVoiceDistortion;
       uniforms.iResolution.value.set(
         container.clientWidth * renderer.getPixelRatio(),
         container.clientHeight * renderer.getPixelRatio(),

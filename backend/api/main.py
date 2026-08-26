@@ -78,25 +78,28 @@ def listen_microphone(duration: float = 3.5):
     user_command = stt_res.get("text", "")
     response = LLMOrchestrator.process_command(user_command)
 
-    # Run TTS in background thread so we don't block the HTTP response
-    tts_duration_ms = 0
+    # Speak response synchronously so frontend stays in 'speaking' animation during exact voice playback
     if response.get("text_response"):
         text_resp = response["text_response"]
-        tts_duration_ms = max(1200, int(len(text_resp) * 45))
-        threading.Thread(target=VoiceTTS.speak, args=(text_resp,), daemon=True).start()
+        VoiceTTS.speak(text_resp)
         
     return {
         "success": True,
         "transcribed_command": user_command,
-        "response": response,
-        "tts_duration_ms": tts_duration_ms
+        "response": response
     }
+
+@app.get("/api/is-speaking")
+def check_is_speaking():
+    """Check if assistant is currently speaking."""
+    return {"speaking": VoiceTTS.is_speaking()}
 
 @app.post("/api/interrupt-speech")
 def interrupt_speech():
     """Immediately stop/interrupt ongoing speech playback (Barge-in)."""
     VoiceTTS.stop_speaking()
     return {"success": True, "interrupted": True}
+
 
 
 
