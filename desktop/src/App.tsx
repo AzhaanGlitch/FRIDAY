@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { GeometricOrb } from './components/GeometricOrb';
+import { GradientOrb } from './components/GradientOrb';
 
 export const App: React.FC = () => {
   const [voiceState, setVoiceState] = useState<'idle' | 'wakeword' | 'listening' | 'speaking' | 'terminated'>('idle');
@@ -118,8 +118,9 @@ export const App: React.FC = () => {
 
   return (
     <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: '#07090e', position: 'relative' }}>
-      {/* 3D Geometric Orb (Audio-Reactive Line Mesh) */}
-      <GeometricOrb voiceState={voiceState} />
+      {/* GPU Shader Gradient Orb (Noise-based 3-color fluid glow) */}
+      <GradientOrb voiceState={voiceState} />
+
 
       {/* Subtle Greyish Bottom-Left Status HUD */}
       <div style={{
