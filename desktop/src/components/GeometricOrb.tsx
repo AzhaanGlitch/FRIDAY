@@ -135,14 +135,20 @@ export const GeometricOrb: React.FC<{
       const time = clock.getElapsedTime();
       const state = voiceStateRef.current;
 
-      // Color mapping
-      let targetHex = 0x38bdf8;
-      if (state === 'listening') targetHex = 0x00f2ff;
-      else if (state === 'speaking') targetHex = 0xc084fc;
-      else if (state === 'terminated') targetHex = 0xef4444;
+      // Color mapping:
+      // Standby / Default: Radiant Gold (#ffd700)
+      // Woken up / Listening: Dark Ember Orange (#ff5500)
+      // Responding / Speaking: Intense Glowing Crimson-Orange (#ff3300)
+      // Terminated: Dim Red (#ef4444)
+      let targetHex = 0xffd700; // Default Gold
+      if (state === 'listening') targetHex = 0xff5500; // Dark Vibrant Orange
+      else if (state === 'speaking') targetHex = 0xff7700; // Bright Glowing Orange
+      else if (state === 'terminated') targetHex = 0xef4444; // Red
+      else targetHex = 0xffd700; // Idle/Wakeword Standby Gold
 
-      baseColor.lerp(new THREE.Color(targetHex), 0.1);
+      baseColor.lerp(new THREE.Color(targetHex), 0.08);
       const r = baseColor.r;
+
       const g = baseColor.g;
       const b = baseColor.b;
 
