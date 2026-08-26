@@ -87,7 +87,8 @@ export const App: React.FC = () => {
       setVoiceState('listening');
 
       try {
-        const data = await fetch('http://localhost:8000/api/listen-mic?duration=4.5', { method: 'POST' }).then(r => r.json());
+        const data = await fetch('http://localhost:8000/api/listen-mic', { method: 'POST' }).then(r => r.json());
+
 
         if (!isRunningRef.current) break;
 
