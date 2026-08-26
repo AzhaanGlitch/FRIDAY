@@ -68,9 +68,10 @@ def clear_history():
     return MemoryDatabase.clear_history()
 
 @app.post("/api/listen-mic")
-def listen_microphone(duration: int = 5):
-    """Record live mic audio with VAD silence detection, transcribe to command, and execute."""
-    stt_res = stt_engine.record_and_transcribe(max_duration_seconds=duration)
+def listen_microphone(duration: float = 3.5):
+    """Record clean live mic audio, transcribe with Groq Whisper, and execute."""
+    stt_res = stt_engine.record_and_transcribe(duration_seconds=duration)
+
     if not stt_res.get("success"):
         return {"success": False, "error": stt_res.get("error", "Failed to capture mic audio")}
     
