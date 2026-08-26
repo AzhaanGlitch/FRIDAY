@@ -173,16 +173,26 @@ RULES:
                 "spoken_reply": reply
             }
 
-        # 5. OPEN App Intent
+        # 5. OPEN App Intent (Requires explicit open verb or standalone app name)
+        open_verbs = ["open", "launch", "start", "run", "play", "khol", "kholo", "kholdo", "chalao", "khol do"]
+        has_open_verb = any(v in text_lower for v in open_verbs)
         for app_key, app_val in app_map.items():
-            pattern = rf'(?:open|launch|start|run|play|khol|kholo|kholdo|chalao|khol do)?\s*(?:the\s+app\s+)?\b{re.escape(app_key)}\b\s*(?:khol\s*do|kholo|chalao|open\s*kardo)?'
-            if re.search(pattern, text_lower):
+            if has_open_verb:
+                if re.search(rf'\b{re.escape(app_key)}\b', text_lower):
+                    reply = f"{app_val} khol rahi hoon." if is_hindi else f"Opening {app_val}."
+                    return {
+                        "action": "open_app",
+                        "params": {"app_name": app_val},
+                        "spoken_reply": reply
+                    }
+            elif text_lower.strip() in [app_key, f"the {app_key}", f"{app_key} app"]:
                 reply = f"{app_val} khol rahi hoon." if is_hindi else f"Opening {app_val}."
                 return {
                     "action": "open_app",
                     "params": {"app_name": app_val},
                     "spoken_reply": reply
                 }
+
 
         # 6. Web URL Open
         web_domains = {

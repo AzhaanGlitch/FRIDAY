@@ -15,13 +15,13 @@ _mic_lock = threading.Lock()
 
 class VoiceSTT:
     """
-    High-Fidelity Speech-to-Text with Calibrated Voice Activity Detection (VAD).
-    - Energy gate ignores background noise/breaths/echoes.
-    - Captures full natural human sentences without cutting off.
+    High-Fidelity Speech-to-Text with Continuous Speech Buffer & Robust VAD.
+    - Does NOT cut off while user is speaking (allows natural pauses up to 1.6 seconds).
+    - Captures long, complex tiling commands smoothly up to 15s.
     """
 
     SAMPLE_RATE = 16000
-    BILINGUAL_PROMPT = "FRIDAY, tum kaun ho, spotify kholo, open youtube, volume badhao, gaana chalao, coding mode, tile chrome left, tile terminal right"
+    BILINGUAL_PROMPT = "FRIDAY, tum kaun ho, spotify kholo, open photos, visual studio code, terminal, google chrome, tile chrome left, tile photos top left, vs code top right, terminal bottom right"
 
     def __init__(self):
         self.recognizer = sr.Recognizer()
@@ -42,15 +42,15 @@ class VoiceSTT:
                     "temperature": 0.0,
                     "prompt": self.BILINGUAL_PROMPT
                 }
-                res = requests.post(url, headers=headers, files=files, data=data, timeout=6)
+                res = requests.post(url, headers=headers, files=files, data=data, timeout=8)
 
             if res.status_code == 200:
                 text = res.json().get("text", "").strip()
                 if text:
                     lower_t = text.lower()
                     # Filter phantom hallucinations on ambient noise
-                    if any(phrase in lower_t for phrase in ["продолжение следует", "subtitles by", "amara.org", "you", "thank you", "thanks for watching"]):
-                        if len(text.split()) <= 3:
+                    if any(phrase in lower_t for phrase in ["продолжение следует", "subtitles by", "amara.org", "you", "thank you", "thanks for watching", "bye"]):
+                        if len(text.split()) <= 2:
                             return ""
                     print(f"[STT Groq Whisper]: '{text}'")
                     return text
@@ -61,26 +61,27 @@ class VoiceSTT:
 
         return ""
 
-    def record_and_transcribe(self, max_duration_seconds: float = 12.0, duration_seconds: float = None, **kwargs) -> dict:
+    def record_and_transcribe(self, max_duration_seconds: float = 15.0, duration_seconds: float = None, **kwargs) -> dict:
         """
-        Record live audio with Calibrated Speech Activity Detection (VAD).
-        Waits for clear human voice (>160 RMS), then records until 1.2s silence pause.
+        Record live audio until user finishes full command.
+        Waits for clear speech (>130 RMS), allows natural breathing pauses (~1.6s of silence), then transcribes.
         """
         if duration_seconds is not None:
-            max_duration_seconds = duration_seconds
+            max_duration_seconds = max(max_duration_seconds, duration_seconds)
 
         if not _mic_lock.acquire(blocking=False):
             return {"success": False, "error": "Another recording is already in progress"}
 
         wav_path = ""
         try:
-            chunk_duration = 0.4
+            chunk_duration = 0.35
             chunk_samples = int(chunk_duration * self.SAMPLE_RATE)
             recorded_chunks = []
             
             voice_started = False
             silence_chunks = 0
-            max_silence_chunks = 3  # ~1.2s silence after speech
+            # 5 consecutive silence chunks = 5 * 0.35s = ~1.75 seconds pause needed to finish speaking
+            max_silence_chunks = 5
             max_total_chunks = int(max_duration_seconds / chunk_duration)
 
             for _ in range(max_total_chunks):
@@ -90,8 +91,8 @@ class VoiceSTT:
                 # Calculate RMS energy
                 energy = np.sqrt(np.mean(chunk.astype(np.float32) ** 2))
 
-                # Calibrated threshold: 160 RMS (clearly distinguishes human speaking from background fan/ambient noise)
-                if energy > 160:
+                # Human voice threshold (130 RMS)
+                if energy > 130:
                     if not voice_started:
                         voice_started = True
                         VoiceTTS.stop_speaking()
@@ -101,10 +102,11 @@ class VoiceSTT:
                     if voice_started:
                         silence_chunks += 1
                         recorded_chunks.append(chunk)
+                        # Finish ONLY when user genuinely stopped speaking for 1.75s
                         if silence_chunks >= max_silence_chunks:
                             break
 
-            if not voice_started or len(recorded_chunks) < 2:
+            if not voice_started or len(recorded_chunks) < 3:
                 return {"success": False, "error": "Silence"}
 
             # Combine recorded speech chunks

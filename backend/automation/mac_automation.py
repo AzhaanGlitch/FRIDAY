@@ -101,8 +101,17 @@ class MacAutomation:
             "discord": "Discord",
             "notion": "Notion",
             "notes": "Notes",
-            "messages": "Messages"
+            "messages": "Messages",
+            "photos": "Photos",
+            "photo": "Photos",
+            "app store": "App Store",
+            "settings": "System Settings",
+            "system settings": "System Settings",
+            "mail": "Mail",
+            "calendar": "Calendar",
+            "whatsapp": "WhatsApp"
         }
+
 
         resolved_processes = [process_alias.get(a.lower(), a) for a in valid_apps[:4]]
         count = len(resolved_processes)
@@ -254,8 +263,12 @@ tell application "System Events"
             "terminal": "Terminal", "google chrome": "Google Chrome", "chrome": "Google Chrome",
             "safari": "Safari", "spotify": "Spotify", "finder": "Finder",
             "calculator": "Calculator", "slack": "Slack", "discord": "Discord",
-            "notion": "Notion", "notes": "Notes", "messages": "Messages"
+            "notion": "Notion", "notes": "Notes", "messages": "Messages",
+            "photos": "Photos", "photo": "Photos", "app store": "App Store",
+            "settings": "System Settings", "system settings": "System Settings",
+            "mail": "Mail", "calendar": "Calendar", "whatsapp": "WhatsApp"
         }
+
 
         # Launch all mentioned apps first
         for app in positions.values():
