@@ -15,20 +15,19 @@ _mic_lock = threading.Lock()
 
 class VoiceSTT:
     """
-    High-Fidelity Speech-to-Text with Dynamic Voice Activity Detection (VAD).
-    - Automatically streams audio chunks until a natural silence pause is detected.
-    - Long sentences (up to 12s) won't get cut off prematurely.
-    - Locks Hindi + English bilingual decoding to eliminate hallucinations.
+    High-Fidelity Speech-to-Text with Calibrated Voice Activity Detection (VAD).
+    - Energy gate ignores background noise/breaths/echoes.
+    - Captures full natural human sentences without cutting off.
     """
 
     SAMPLE_RATE = 16000
-    BILINGUAL_PROMPT = "FRIDAY, tum kaun ho, kaise ho, spotify kholo, open youtube, volume badhao, gaana chalao, terminate system, coding mode, tile chrome left, tile terminal right"
+    BILINGUAL_PROMPT = "FRIDAY, tum kaun ho, spotify kholo, open youtube, volume badhao, gaana chalao, coding mode, tile chrome left, tile terminal right"
 
     def __init__(self):
         self.recognizer = sr.Recognizer()
 
     def _transcribe_groq_whisper(self, wav_path: str) -> str:
-        """Transcribe audio using Groq's Whisper Large v3 Turbo with bilingual grounding."""
+        """Transcribe audio using Groq's Whisper Large v3 Turbo."""
         if not settings.GROQ_API_KEY:
             return ""
 
@@ -49,8 +48,9 @@ class VoiceSTT:
                 text = res.json().get("text", "").strip()
                 if text:
                     lower_t = text.lower()
-                    if any(phrase in lower_t for phrase in ["продолжение следует", "subtitles by", "amara.org", "you"]):
-                        if len(text.split()) <= 2:
+                    # Filter phantom hallucinations on ambient noise
+                    if any(phrase in lower_t for phrase in ["продолжение следует", "subtitles by", "amara.org", "you", "thank you", "thanks for watching"]):
+                        if len(text.split()) <= 3:
                             return ""
                     print(f"[STT Groq Whisper]: '{text}'")
                     return text
@@ -63,8 +63,8 @@ class VoiceSTT:
 
     def record_and_transcribe(self, max_duration_seconds: float = 12.0, duration_seconds: float = None, **kwargs) -> dict:
         """
-        Record live audio with Dynamic Speech Activity Detection (VAD).
-        Keeps recording while user is speaking, stops automatically after 1.2s silence pause.
+        Record live audio with Calibrated Speech Activity Detection (VAD).
+        Waits for clear human voice (>160 RMS), then records until 1.2s silence pause.
         """
         if duration_seconds is not None:
             max_duration_seconds = duration_seconds
@@ -74,13 +74,13 @@ class VoiceSTT:
 
         wav_path = ""
         try:
-            chunk_duration = 0.5
+            chunk_duration = 0.4
             chunk_samples = int(chunk_duration * self.SAMPLE_RATE)
             recorded_chunks = []
             
             voice_started = False
             silence_chunks = 0
-            max_silence_chunks = 3  # ~1.2 to 1.5s of continuous silence after voice starts
+            max_silence_chunks = 3  # ~1.2s silence after speech
             max_total_chunks = int(max_duration_seconds / chunk_duration)
 
             for _ in range(max_total_chunks):
@@ -90,29 +90,24 @@ class VoiceSTT:
                 # Calculate RMS energy
                 energy = np.sqrt(np.mean(chunk.astype(np.float32) ** 2))
 
-                if energy > 65:  # Voice detected
+                # Calibrated threshold: 160 RMS (clearly distinguishes human speaking from background fan/ambient noise)
+                if energy > 160:
                     if not voice_started:
                         voice_started = True
-                        VoiceTTS.stop_speaking() # Instant barge-in!
+                        VoiceTTS.stop_speaking()
                     silence_chunks = 0
                     recorded_chunks.append(chunk)
                 else:
                     if voice_started:
                         silence_chunks += 1
                         recorded_chunks.append(chunk)
-                        # Stop if user finished speaking and paused
                         if silence_chunks >= max_silence_chunks:
                             break
-                    else:
-                        # Before speech starts, keep only 1 chunk buffer for crisp start
-                        if len(recorded_chunks) >= 2:
-                            recorded_chunks.pop(0)
-                        recorded_chunks.append(chunk)
 
-            if not voice_started or not recorded_chunks:
+            if not voice_started or len(recorded_chunks) < 2:
                 return {"success": False, "error": "Silence"}
 
-            # Combine all recorded speech chunks into single audio array
+            # Combine recorded speech chunks
             full_audio = np.concatenate(recorded_chunks, axis=0)
 
             # Save clean WAV
@@ -120,10 +115,9 @@ class VoiceSTT:
             wav.write(tmp.name, self.SAMPLE_RATE, full_audio)
             wav_path = tmp.name
 
-            # 1. Primary: Groq Whisper Large-v3 (Hinglish Grounded)
+            # Transcribe with Whisper
             text = self._transcribe_groq_whisper(wav_path)
 
-            # 2. Fallback: Google Speech Recognition
             if not text:
                 try:
                     with sr.AudioFile(wav_path) as source:
@@ -133,7 +127,7 @@ class VoiceSTT:
                 except Exception:
                     pass
 
-            if text:
+            if text and len(text.strip()) > 1:
                 return {"success": True, "text": text}
             return {"success": False, "error": "No speech recognized"}
 
