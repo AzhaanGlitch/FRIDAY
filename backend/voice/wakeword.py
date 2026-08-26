@@ -4,7 +4,6 @@ import speech_recognition as sr
 import tempfile
 import time
 import os
-import numpy as np
 
 class WakeWordDetector:
     """Detects 'FRIDAY' wake word using sounddevice (no PyAudio) to prevent SIGSEGV crashes."""
@@ -12,8 +11,8 @@ class WakeWordDetector:
     SAMPLE_RATE = 16000
 
     @classmethod
-    def _record_chunk(cls, duration: float = 2.5) -> str:
-        """Record a short audio chunk to a temp WAV file using sounddevice."""
+    def _record_chunk(cls, duration: float = 1.2) -> str:
+        """Record a short 1.2s audio chunk to a temp WAV file."""
         try:
             audio_data = sd.rec(int(duration * cls.SAMPLE_RATE), samplerate=cls.SAMPLE_RATE, channels=1, dtype='int16')
             sd.wait()
@@ -36,9 +35,9 @@ class WakeWordDetector:
         start_time = time.time()
 
         while time.time() - start_time < timeout_seconds:
-            wav_path = cls._record_chunk(duration=2.5)
+            wav_path = cls._record_chunk(duration=1.2)
             if not wav_path:
-                time.sleep(0.5)
+                time.sleep(0.1)
                 continue
             try:
                 with sr.AudioFile(wav_path) as source:
