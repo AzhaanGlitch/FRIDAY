@@ -42,6 +42,12 @@ const fragmentShader = /* glsl */ `
   uniform float pulseSpeed;
   uniform float pulseAmp;
 
+  // Dynamic state-based base palette colors
+  uniform vec3 color0;
+  uniform vec3 color1;
+  uniform vec3 color2;
+  uniform vec3 color3;
+
   varying vec2 vUv;
 
   // --- YIQ color space hue rotation ---
@@ -107,12 +113,6 @@ const fragmentShader = /* glsl */ `
     return vec4(colorIn.rgb / (a + 1e-5), a);
   }
 
-  // Golden / Warm Ember base palette for FRIDAY
-  const vec3 baseColor0 = vec3(0.95, 0.65, 0.10);   // Radiant Gold
-  const vec3 baseColor1 = vec3(1.0, 0.32, 0.05);    // Deep Ember Orange
-  const vec3 baseColor2 = vec3(1.0, 0.15, 0.05);    // Intense Sunset Crimson
-  const vec3 baseColor3 = vec3(0.0, 0.0, 0.0);      // Pure Black void
-
   float light1(float intensity, float attenuation, float dist) {
     return intensity / (1.0 + dist * attenuation);
   }
@@ -122,10 +122,10 @@ const fragmentShader = /* glsl */ `
   }
 
   vec4 draw(vec2 uv) {
-    vec3 color0 = adjustHue(baseColor0, hue);
-    vec3 color1 = adjustHue(baseColor1, hue);
-    vec3 color2 = adjustHue(baseColor2, hue);
-    vec3 color3 = adjustHue(baseColor3, hue);
+    vec3 c0 = adjustHue(color0, hue);
+    vec3 c1 = adjustHue(color1, hue);
+    vec3 c2 = adjustHue(color2, hue);
+    vec3 c3 = adjustHue(color3, hue);
 
     float len = length(uv);
     float invLen = len > 0.0 ? 1.0 / len : 0.0;
@@ -150,9 +150,9 @@ const fragmentShader = /* glsl */ `
     float v2 = smoothstep(1.0, mix(innerRadius, 1.0, n0 * 0.5), len);
     float v3 = smoothstep(innerRadius, mix(innerRadius, 1.0, 0.5), len);
 
-    vec3 col = mix(color1, color2, cl);
-    col = mix(col, color0, n0);
-    col = mix(color3, col, v0);
+    vec3 col = mix(c1, c2, cl);
+    col = mix(col, c0, n0);
+    col = mix(c3, col, v0);
     col = (col + v1) * v2 * v3;
     col = clamp(col, 0.0, 1.0);
 
@@ -196,13 +196,44 @@ export const GradientOrb: React.FC<{
 
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 
-    // Fullscreen single-triangle geometry (zero draw call overhead)
+    // Fullscreen single-triangle geometry
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute(
       "position",
       new THREE.Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3),
     );
     geometry.setAttribute("uv", new THREE.Float32BufferAttribute([0, 0, 2, 0, 0, 2], 2));
+
+    // Preset Palettes:
+    // 1. Idle/Standby: Pure Glowing White/Silver Ice
+    const whitePalette = {
+      c0: new THREE.Vector3(0.95, 0.98, 1.0),
+      c1: new THREE.Vector3(0.80, 0.85, 0.95),
+      c2: new THREE.Vector3(0.65, 0.75, 0.90),
+      c3: new THREE.Vector3(0.0, 0.0, 0.0)
+    };
+
+    // 2. Active / Woken Up: Original Vibrant Blue + Purple + Orange Gradient
+    const activeGradientPalette = {
+      c0: new THREE.Vector3(0.239, 0.353, 1.0),   // Electric Blue
+      c1: new THREE.Vector3(0.616, 0.0, 1.0),     // Vivid Purple / Violet
+      c2: new THREE.Vector3(1.0, 0.373, 0.122),   // Fiery Orange
+      c3: new THREE.Vector3(0.0, 0.0, 0.0)
+    };
+
+    // 3. Terminated: Pure Warning Red
+    const terminatedPalette = {
+      c0: new THREE.Vector3(1.0, 0.1, 0.1),
+      c1: new THREE.Vector3(0.8, 0.0, 0.05),
+      c2: new THREE.Vector3(0.5, 0.0, 0.0),
+      c3: new THREE.Vector3(0.0, 0.0, 0.0)
+    };
+
+    // Current lerping color uniforms
+    const curC0 = new THREE.Vector3().copy(whitePalette.c0);
+    const curC1 = new THREE.Vector3().copy(whitePalette.c1);
+    const curC2 = new THREE.Vector3().copy(whitePalette.c2);
+    const curC3 = new THREE.Vector3().copy(whitePalette.c3);
 
     const uniforms = {
       iTime: { value: 0 },
@@ -213,6 +244,10 @@ export const GradientOrb: React.FC<{
       innerRadius: { value: config.innerRadius },
       pulseSpeed: { value: 1.5 },
       pulseAmp: { value: 0.02 },
+      color0: { value: curC0 },
+      color1: { value: curC1 },
+      color2: { value: curC2 },
+      color3: { value: curC3 },
     };
 
     const material = new THREE.ShaderMaterial({
@@ -237,8 +272,6 @@ export const GradientOrb: React.FC<{
     const clock = new THREE.Clock();
     let reqId = 0;
     let currentRot = 0;
-    let targetHue = 0;
-    let currentHue = 0;
 
     const handleResize = () => {
       if (!container) return;
@@ -252,43 +285,42 @@ export const GradientOrb: React.FC<{
     const animate = () => {
       reqId = requestAnimationFrame(animate);
       const t = clock.getElapsedTime();
-      const dt = clock.getDelta();
       const state = voiceStateRef.current;
 
-      // React to Voice States:
-      // - Standby/Wakeword: Glowing Pure Gold
-      // - Listening: Dark Orange/Ember with energetic breathing pulse
-      // - Speaking: Intense Crimson-Orange with fast fluid noise
-      // - Terminated: Crimson Red
+      let targetPalette = whitePalette;
       let rotSpeed = config.rotationSpeed;
       let targetPulseSpeed = 1.5;
       let targetPulseAmp = 0.02;
 
       if (state === 'idle' || state === 'wakeword') {
-        targetHue = 0; // Pure Gold / Amber
-        rotSpeed = 0.3;
-        targetPulseSpeed = 1.5;
-        targetPulseAmp = 0.02;
-      } else if (state === 'listening') {
-        targetHue = 25; // Dark Orange Shift
-        rotSpeed = 0.6;
-        targetPulseSpeed = 3.5;
-        targetPulseAmp = 0.06;
-      } else if (state === 'speaking') {
-        targetHue = 45; // Vibrant Crimson Orange
-        rotSpeed = 1.0;
-        targetPulseSpeed = 6.0;
-        targetPulseAmp = 0.09;
+        // White on Idle / Standby
+        targetPalette = whitePalette;
+        rotSpeed = 0.25;
+        targetPulseSpeed = 1.2;
+        targetPulseAmp = 0.015;
+      } else if (state === 'listening' || state === 'speaking') {
+        // Original Blue + Purple + Orange Gradient on Woken Up & Taking Commands
+        targetPalette = activeGradientPalette;
+        rotSpeed = state === 'speaking' ? 0.9 : 0.55;
+        targetPulseSpeed = state === 'speaking' ? 5.5 : 3.2;
+        targetPulseAmp = state === 'speaking' ? 0.08 : 0.05;
       } else if (state === 'terminated') {
-        targetHue = 180; // Red shift
+        // Red on Termination
+        targetPalette = terminatedPalette;
         rotSpeed = 0.1;
+        targetPulseSpeed = 0.8;
+        targetPulseAmp = 0.01;
       }
 
-      currentHue += (targetHue - currentHue) * 0.08;
+      // Smooth color transitions between palettes
+      curC0.lerp(targetPalette.c0, 0.06);
+      curC1.lerp(targetPalette.c1, 0.06);
+      curC2.lerp(targetPalette.c2, 0.06);
+      curC3.lerp(targetPalette.c3, 0.06);
+
       currentRot += 0.01 * rotSpeed;
 
       uniforms.iTime.value = t;
-      uniforms.hue.value = currentHue;
       uniforms.rot.value = currentRot;
       uniforms.pulseSpeed.value = targetPulseSpeed;
       uniforms.pulseAmp.value = targetPulseAmp;
