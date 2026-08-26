@@ -6,216 +6,229 @@ from backend.automation.system_automation import SystemAutomation
 from backend.memory.database import MemoryDatabase
 
 class LLMOrchestrator:
+    """Orchestrates natural language intent parsing, fuzzy matching, and fast execution."""
 
-    """Orchestrates natural language intent parsing and response generation."""
-
-    SYSTEM_PROMPT = """You are FRIDAY, an intelligent computer AI assistant.
-You can execute commands on the user's computer or respond conversationally.
-If the command requires system action, output JSON with 'action' and 'params'.
-
-Supported actions:
-- open_app (params: {"app_name": "Spotify" | "Calculator" | "VSCode" | ...})
-- close_app (params: {"app_name": "Spotify" | "Calculator" | ...})
-- set_volume (params: {"level": 0 to 100})
-- mute_sound (params: {"mute": true | false})
-- minimize_all (params: {})
-- media_control (params: {"action": "play" | "pause" | "next" | "previous"})
-- lock_screen (params: {})
-- sleep_system (params: {})
-- set_brightness (params: {"level": 0 to 100})
-- clipboard_get (params: {})
-- clipboard_set (params: {"text": "<text>"})
-- search_file (params: {"filename": "<file_name>"})
-- open_url (params: {"url": "<url>"})
-- take_screenshot (params: {})
-- system_info (params: {})
-- coding_mode (params: {})
+    SYSTEM_PROMPT = """You are FRIDAY (Female Replacement Intelligent Digital Assistant Youth), Tony Stark's sharp, intelligent, and witty AI desktop assistant.
+Rules:
+1. If the user wants to control the computer or open/close apps/websites, output a JSON object: {"action": "<action_name>", "params": {...}, "spoken_reply": "<short reply to speak>"}.
+2. Supported actions:
+   - open_app: {"app_name": "Spotify" | "VSCode" | "Chrome" | "Terminal" | ...}
+   - close_app: {"app_name": "Spotify" | ...}
+   - open_url: {"url": "youtube.com" | "google.com" | "github.com" | ...}
+   - set_volume: {"level": 0-100}
+   - mute_sound: {"mute": true | false}
+   - set_brightness: {"level": 0-100}
+   - media_control: {"action": "play" | "pause" | "next" | "previous"}
+   - lock_screen: {}
+   - take_screenshot: {}
+   - terminate_system: {}
+3. If it's a general question or conversation, reply naturally in 1-2 quick sentences for voice synthesis.
 """
 
     @classmethod
-    def process_command(cls, user_text: str) -> dict:
-        """Process natural language user command."""
-        text_lower = user_text.lower().strip()
-
-        # Clear History Intent
-        if "clear history" in text_lower or "forget history" in text_lower or "delete conversation" in text_lower:
-            res = MemoryDatabase.clear_history()
-            return {"text_response": "Cleared all conversation history from local database.", "action_executed": "clear_history", "result": res}
-
-        # Terminate System Intent (Shutdown app & loop)
-        elif "terminate the system" in text_lower or "terminate system" in text_lower or "shutdown system" in text_lower:
-            MemoryDatabase.save_message("user", user_text)
-            MemoryDatabase.save_message("friday", "Terminating system. Goodbye sir.", action="terminate_system")
+    def _fuzzy_direct_match(cls, text_lower: str) -> dict | None:
+        """
+        Ultra-fast direct keyword & fuzzy regex matching (< 1ms).
+        Immediately triggers common commands even with imperfect transcription.
+        """
+        # 1. Termination
+        if any(w in text_lower for w in ["terminate the system", "terminate system", "shutdown system", "exit system", "goodbye friday"]):
             return {
-                "text_response": "Terminating system. Goodbye sir.",
-                "action_executed": "terminate_system",
-                "result": {"terminate": True}
+                "action": "terminate_system",
+                "params": {},
+                "spoken_reply": "Terminating system. Goodbye sir."
             }
 
+        # 2. Open App / Websites (Fuzzy matching)
+        # Catches "open spotify", "open up spotify", "launch spotify", "can you open spotify", "spotify please", "start spotify"
+        open_match = re.search(r'(?:open|launch|start|run|play on)\s+(?:up\s+)?([a-zA-Z0-9\.\s]+)', text_lower)
+        if open_match or any(w in text_lower for w in ["spotify", "youtube", "chrome", "google", "vscode", "terminal", "calculator", "safari"]):
+            target = open_match.group(1).strip() if open_match else text_lower
+            target = target.replace("please", "").replace("for me", "").replace("the app", "").replace("app", "").strip()
 
-        # Multi-Step Workflow: Coding Mode
-        if "coding mode" in text_lower or "start coding" in text_lower:
-            res1 = SystemAutomation.execute_intent("open_app", {"app_name": "Visual Studio Code"})
-            res2 = SystemAutomation.execute_intent("open_app", {"app_name": "Terminal"})
-            res3 = SystemAutomation.execute_intent("open_url", {"url": "github.com"})
-            res4 = SystemAutomation.execute_intent("set_volume", {"level": 35})
-            output_msg = "Initiating coding mode. Opened VS Code, Terminal, GitHub, and set volume to 35%."
-            MemoryDatabase.save_message("user", user_text)
-            MemoryDatabase.save_message("friday", output_msg, action="coding_mode")
-            return {
-                "text_response": output_msg,
-                "action_executed": "coding_mode",
-                "result": {"vscode": res1, "terminal": res2, "browser": res3, "volume": res4}
+            # Check websites
+            web_domains = {
+                "youtube": "youtube.com", "google": "google.com", "github": "github.com",
+                "twitter": "twitter.com", "x": "x.com", "reddit": "reddit.com",
+                "netflix": "netflix.com", "facebook": "facebook.com", "instagram": "instagram.com",
+                "linkedin": "linkedin.com", "chatgpt": "chatgpt.com"
             }
+            for key, domain in web_domains.items():
+                if key in target or key == text_lower.strip():
+                    return {
+                        "action": "open_url",
+                        "params": {"url": domain},
+                        "spoken_reply": f"Opening {key.capitalize()} in your browser."
+                    }
 
-
-        # Close App
-        elif text_lower.startswith("close ") or text_lower.startswith("quit ") or text_lower.startswith("exit "):
-            app = text_lower.replace("close ", "").replace("quit ", "").replace("exit ", "").replace("please", "").strip()
-            action_res = SystemAutomation.execute_intent("close_app", {"app_name": app})
-            return {
-                "text_response": f"Closing {app}." if action_res.get("success") else f"Failed to close {app}: {action_res.get('error')}",
-                "action_executed": "close_app",
-                "result": action_res
-            }
-
-        # Open App
-        elif text_lower.startswith("open ") or text_lower.startswith("launch "):
-            target = text_lower.replace("open ", "").replace("launch ", "").replace("please", "").strip()
-            # If target looks like a website domain
-            if "." in target or target.startswith("http") or target in ["google", "youtube", "github", "twitter"]:
-                url = target if "." in target else f"{target}.com"
-                action_res = SystemAutomation.execute_intent("open_url", {"url": url})
+            if "." in target or target.startswith("http"):
                 return {
-                    "text_response": f"Opening {url} in your browser.",
-                    "action_executed": "open_url",
-                    "result": action_res
+                    "action": "open_url",
+                    "params": {"url": target},
+                    "spoken_reply": f"Opening {target}."
                 }
-            
+
+            # Check Applications
             app_map = {
-                "spotify": "Spotify", "calculator": "Calculator", "vscode": "Visual Studio Code",
-                "code": "Visual Studio Code", "finder": "Finder", "safari": "Safari",
-                "chrome": "Google Chrome", "terminal": "Terminal", "notepad": "Notepad"
+                "spotify": "Spotify", "calculator": "Calculator", "calc": "Calculator",
+                "vscode": "Visual Studio Code", "code": "Visual Studio Code", "vs code": "Visual Studio Code",
+                "finder": "Finder", "safari": "Safari", "chrome": "Google Chrome",
+                "google chrome": "Google Chrome", "terminal": "Terminal", "notepad": "Notepad",
+                "settings": "System Settings", "music": "Music", "mail": "Mail", "slack": "Slack"
             }
-            app_target = app_map.get(target, target.capitalize())
-            action_res = SystemAutomation.execute_intent("open_app", {"app_name": app_target})
+            for app_key, app_val in app_map.items():
+                if app_key in target:
+                    return {
+                        "action": "open_app",
+                        "params": {"app_name": app_val},
+                        "spoken_reply": f"Opening {app_val}."
+                    }
+
+        # 3. Close App
+        close_match = re.search(r'(?:close|quit|exit|kill|stop)\s+(?:up\s+)?([a-zA-Z0-9\.\s]+)', text_lower)
+        if close_match:
+            target = close_match.group(1).strip().replace("please", "").strip()
             return {
-                "text_response": f"Opening {app_target} for you." if action_res.get("success") else f"Could not launch {app_target}: {action_res.get('error')}",
-                "action_executed": "open_app",
-                "result": action_res
+                "action": "close_app",
+                "params": {"app_name": target.capitalize()},
+                "spoken_reply": f"Closing {target.capitalize()}."
             }
 
-        # Mute / Unmute Sound
-        elif "unmute sound" in text_lower or "unmute" in text_lower:
-            action_res = SystemAutomation.execute_intent("mute_sound", {"mute": False})
-            return {"text_response": "Unmuted system audio.", "action_executed": "mute_sound", "result": action_res}
-
-        elif "mute sound" in text_lower or "mute" in text_lower:
-            action_res = SystemAutomation.execute_intent("mute_sound", {"mute": True})
-            return {"text_response": "Muted system audio.", "action_executed": "mute_sound", "result": action_res}
-
-        # Volume
-        elif "volume" in text_lower:
+        # 4. Volume Controls
+        if "volume" in text_lower or "sound" in text_lower:
+            if "mute" in text_lower:
+                return {"action": "mute_sound", "params": {"mute": True}, "spoken_reply": "Muting system audio."}
+            if "unmute" in text_lower:
+                return {"action": "mute_sound", "params": {"mute": False}, "spoken_reply": "Unmuting system audio."}
             numbers = re.findall(r'\d+', text_lower)
             level = int(numbers[0]) if numbers else 50
-            action_res = SystemAutomation.execute_intent("set_volume", {"level": level})
-            return {"text_response": f"Setting volume to {level} percent.", "action_executed": "set_volume", "result": action_res}
+            return {"action": "set_volume", "params": {"level": level}, "spoken_reply": f"Setting volume to {level}%."}
 
-        # Brightness
-        elif "brightness" in text_lower:
-            numbers = re.findall(r'\d+', text_lower)
-            level = int(numbers[0]) if numbers else 80
-            action_res = SystemAutomation.execute_intent("set_brightness", {"level": level})
-            return {"text_response": f"Adjusted screen brightness to {level} percent.", "action_executed": "set_brightness", "result": action_res}
+        # 5. Media Playback
+        if any(w in text_lower for w in ["pause music", "pause song", "pause playback", "pause"]):
+            return {"action": "media_control", "params": {"action": "pause"}, "spoken_reply": "Paused playback."}
+        if any(w in text_lower for w in ["play music", "resume music", "play song", "resume"]):
+            return {"action": "media_control", "params": {"action": "play"}, "spoken_reply": "Resumed playback."}
+        if any(w in text_lower for w in ["next song", "next track", "skip song"]):
+            return {"action": "media_control", "params": {"action": "next"}, "spoken_reply": "Skipping to next track."}
 
-        # Minimize All / Show Desktop
-        elif "minimize all" in text_lower or "show desktop" in text_lower or "hide windows" in text_lower:
-            action_res = SystemAutomation.execute_intent("minimize_all", {})
-            return {"text_response": "Minimized all windows.", "action_executed": "minimize_all", "result": action_res}
+        # 6. Screenshot
+        if "screenshot" in text_lower or "screen capture" in text_lower:
+            return {"action": "take_screenshot", "params": {}, "spoken_reply": "Screenshot captured."}
 
-        # Media controls (pause/play/next/previous)
-        elif "pause music" in text_lower or "pause video" in text_lower or text_lower == "pause":
-            action_res = SystemAutomation.execute_intent("media_control", {"action": "pause"})
-            return {"text_response": "Paused media playback.", "action_executed": "media_control", "result": action_res}
+        # 7. Lock screen
+        if "lock screen" in text_lower or "lock mac" in text_lower:
+            return {"action": "lock_screen", "params": {}, "spoken_reply": "Locking screen."}
 
-        elif "play music" in text_lower or "resume music" in text_lower or text_lower == "play":
-            action_res = SystemAutomation.execute_intent("media_control", {"action": "play"})
-            return {"text_response": "Resumed media playback.", "action_executed": "media_control", "result": action_res}
+        # 8. Coding mode
+        if "coding mode" in text_lower or "start coding" in text_lower:
+            return {"action": "coding_mode", "params": {}, "spoken_reply": "Coding mode initiated."}
 
-        elif "next song" in text_lower or "next track" in text_lower:
-            action_res = SystemAutomation.execute_intent("media_control", {"action": "next"})
-            return {"text_response": "Skipped to next track.", "action_executed": "media_control", "result": action_res}
+        return None
 
-        # Lock / Sleep
-        elif "lock screen" in text_lower or "lock pc" in text_lower or "lock computer" in text_lower or "lock mac" in text_lower:
-            action_res = SystemAutomation.execute_intent("lock_screen", {})
-            return {"text_response": "Locking screen.", "action_executed": "lock_screen", "result": action_res}
+    @classmethod
+    def _call_groq_with_fallbacks(cls, user_text: str) -> str:
+        """Call Groq API with fallback chain."""
+        if not settings.GROQ_API_KEY:
+            return ""
 
-        elif "sleep system" in text_lower or "sleep computer" in text_lower or "put laptop to sleep" in text_lower:
-            action_res = SystemAutomation.execute_intent("sleep_system", {})
-            return {"text_response": "Putting system to sleep.", "action_executed": "sleep_system", "result": action_res}
+        fallback_list = [m.strip() for m in settings.GROQ_FALLBACK_MODELS.split(",") if m.strip()]
+        models_to_try = [settings.GROQ_MODEL] + [m for m in fallback_list if m != settings.GROQ_MODEL]
 
-        # Clipboard Operations
-        elif "read clipboard" in text_lower or "what's in clipboard" in text_lower or "get clipboard" in text_lower:
-            action_res = SystemAutomation.execute_intent("clipboard_get", {})
-            content = action_res.get("content", "")
-            return {
-                "text_response": f"Clipboard contents: '{content}'" if content else "Clipboard is empty.",
-                "action_executed": "clipboard_get",
-                "result": action_res
-            }
-
-        elif text_lower.startswith("copy ") or text_lower.startswith("set clipboard "):
-            text_to_copy = text_lower.replace("copy ", "").replace("set clipboard ", "").strip()
-            action_res = SystemAutomation.execute_intent("clipboard_set", {"text": text_to_copy})
-            return {"text_response": f"Copied '{text_to_copy}' to clipboard.", "action_executed": "clipboard_set", "result": action_res}
-
-        # Search File
-        elif "find file" in text_lower or "search file" in text_lower or "find document" in text_lower:
-            filename = text_lower.replace("find file", "").replace("search file", "").replace("find document", "").strip()
-            action_res = SystemAutomation.execute_intent("search_file", {"filename": filename})
-            files = action_res.get("files", [])
-            return {
-                "text_response": f"Found {len(files)} matching file(s): {', '.join(files[:3])}" if files else f"No files matching '{filename}' found.",
-                "action_executed": "search_file",
-                "result": action_res
-            }
-
-        # Screenshot
-        elif "screenshot" in text_lower or "capture screen" in text_lower:
-            action_res = SystemAutomation.execute_intent("take_screenshot", {})
-            return {"text_response": "Captured screenshot.", "action_executed": "take_screenshot", "result": action_res}
-
-        # System Info
-        elif "system info" in text_lower or "status" in text_lower:
-            action_res = SystemAutomation.execute_intent("system_info", {})
-            info = action_res.get("info", {})
-            return {
-                "text_response": f"Running on {info.get('platform', 'macOS')} (Python {info.get('python_version')}). All systems operational.",
-                "action_executed": "system_info",
-                "result": action_res
-            }
-
-        # Fallback to Ollama or Default Conversational AI
-        text_resp = f"I heard: '{user_text}'. All FRIDAY automation drivers online."
-        try:
-            if settings.LLM_PROVIDER == "ollama":
-                res = requests.post(
-                    f"{settings.OLLAMA_HOST}/api/generate",
-                    json={"model": settings.OLLAMA_MODEL, "prompt": f"{cls.SYSTEM_PROMPT}\nUser: {user_text}\nAssistant:", "stream": False},
-                    timeout=5
-                )
-                if res.status_code == 200:
-                    data = res.json()
-                    text_resp = data.get("response", "I am online and ready.")
-        except Exception:
-            pass
-
-        MemoryDatabase.save_message("user", user_text)
-        MemoryDatabase.save_message("friday", text_resp, action="none")
-
-        return {
-            "text_response": text_resp,
-            "action_executed": "none"
+        headers = {
+            "Authorization": f"Bearer {settings.GROQ_API_KEY}",
+            "Content-Type": "application/json"
         }
 
+        for model_name in models_to_try:
+            try:
+                payload = {
+                    "model": model_name,
+                    "messages": [
+                        {"role": "system", "content": cls.SYSTEM_PROMPT},
+                        {"role": "user", "content": user_text}
+                    ],
+                    "temperature": 0.5,
+                    "max_tokens": 120
+                }
+                resp = requests.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers=headers,
+                    json=payload,
+                    timeout=4
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    content = data["choices"][0]["message"]["content"].strip()
+                    if content:
+                        return content
+            except Exception as e:
+                print(f"[Groq Error ({model_name})]: {e}")
+
+        return ""
+
+    @classmethod
+    def process_command(cls, user_text: str) -> dict:
+        """Process command with instant execution + parallel voice feedback."""
+        text_lower = user_text.lower().strip()
+
+        # Step 1: Instant Fuzzy / Intent Match (<1ms response time)
+        matched_intent = cls._fuzzy_direct_match(text_lower)
+        if matched_intent:
+            action = matched_intent["action"]
+            params = matched_intent.get("params", {})
+            spoken_reply = matched_intent.get("spoken_reply", "")
+
+            # Execute intent immediately
+            if action == "coding_mode":
+                res1 = SystemAutomation.execute_intent("open_app", {"app_name": "Visual Studio Code"})
+                res2 = SystemAutomation.execute_intent("open_app", {"app_name": "Terminal"})
+                res3 = SystemAutomation.execute_intent("open_url", {"url": "github.com"})
+                action_res = {"vscode": res1, "terminal": res2, "browser": res3}
+            elif action == "terminate_system":
+                action_res = {"terminate": True}
+            else:
+                action_res = SystemAutomation.execute_intent(action, params)
+
+            MemoryDatabase.save_message("user", user_text)
+            MemoryDatabase.save_message("friday", spoken_reply, action=action)
+
+            return {
+                "text_response": spoken_reply,
+                "action_executed": action,
+                "result": action_res
+            }
+
+        # Step 2: Groq LLM Intelligent Processing
+        llm_response = cls._call_groq_with_fallbacks(user_text)
+
+        # Check if Groq returned a JSON action
+        if llm_response.startswith("{") and "action" in llm_response:
+            try:
+                parsed = json.loads(llm_response)
+                action = parsed.get("action", "none")
+                params = parsed.get("params", {})
+                spoken = parsed.get("spoken_reply", f"Executing {action}.")
+                action_res = SystemAutomation.execute_intent(action, params)
+
+                MemoryDatabase.save_message("user", user_text)
+                MemoryDatabase.save_message("friday", spoken, action=action)
+                return {
+                    "text_response": spoken,
+                    "action_executed": action,
+                    "result": action_res
+                }
+            except Exception:
+                pass
+
+        if not llm_response:
+            llm_response = f"Acknowledged: '{user_text}'. All systems operational."
+
+        MemoryDatabase.save_message("user", user_text)
+        MemoryDatabase.save_message("friday", llm_response, action="none")
+
+        return {
+            "text_response": llm_response,
+            "action_executed": "none",
+            "result": {}
+        }

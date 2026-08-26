@@ -9,17 +9,32 @@ import numpy as np
 # Global mutex — only one mic recording at a time
 _mic_lock = threading.Lock()
 
+# Global Whisper Model Cache
+_whisper_model = None
+
+def _get_whisper():
+    global _whisper_model
+    if _whisper_model is None:
+        try:
+            import whisper
+            print("[STT] Loading Whisper (tiny) model for ultra-accurate speech recognition...")
+            _whisper_model = whisper.load_model("tiny")
+        except Exception as e:
+            print(f"[STT] Whisper load notice: {e}")
+    return _whisper_model
+
 class VoiceSTT:
-    """Speech-to-Text engine using sounddevice with Smart Silence Detection (VAD)."""
+    """Speech-to-Text engine using Whisper AI + Google fallback with Smart Silence Detection (VAD)."""
 
     SAMPLE_RATE = 16000
 
-    def __init__(self, model_size: str = "base"):
-        self.model_size = model_size
+    def __init__(self):
         self.recognizer = sr.Recognizer()
+        self.recognizer.energy_threshold = 150
+        self.recognizer.dynamic_energy_threshold = True
 
-    def record_and_transcribe(self, max_duration_seconds: int = 5, silence_limit_seconds: float = 0.8) -> dict:
-        """Record live audio until user stops speaking or max duration is reached."""
+    def record_and_transcribe(self, max_duration_seconds: int = 7, silence_limit_seconds: float = 1.0) -> dict:
+        """Record live audio with VAD silence detection and transcribe with Whisper/Google."""
         if not _mic_lock.acquire(blocking=False):
             return {"success": False, "error": "Another recording is already in progress"}
 
@@ -34,17 +49,17 @@ class VoiceSTT:
             has_speech_started = False
             silent_chunk_count = 0
 
-            print(f"[STT] Listening for command (smart silence detection)...")
+            print(f"[STT] Listening for command (Whisper + VAD)...")
 
             for _ in range(max_chunks):
                 chunk = sd.rec(chunk_samples, samplerate=self.SAMPLE_RATE, channels=1, dtype='int16')
                 sd.wait()
                 audio_chunks.append(chunk)
 
-                # Calculate RMS energy of current 0.2s audio chunk
+                # RMS energy
                 energy = np.sqrt(np.mean(chunk.astype(np.float32) ** 2))
 
-                if energy > 200:  # Speech detected threshold
+                if energy > 120:  # Speech threshold
                     has_speech_started = True
                     silent_chunk_count = 0
                 elif has_speech_started:
@@ -61,11 +76,25 @@ class VoiceSTT:
             wav.write(tmp.name, self.SAMPLE_RATE, full_audio)
             wav_path = tmp.name
 
+            # 1. Try Whisper First (Most accurate)
+            w_model = _get_whisper()
+            if w_model:
+                try:
+                    result = w_model.transcribe(wav_path, fp16=False, language="en")
+                    text = result.get("text", "").strip()
+                    if text:
+                        print(f"[STT Whisper Transcribed]: '{text}'")
+                        return {"success": True, "text": text}
+                except Exception as e:
+                    print(f"[STT Whisper Error, falling back to Google]: {e}")
+
+            # 2. Fallback to Google STT
             with sr.AudioFile(wav_path) as source:
                 audio = self.recognizer.record(source)
                 text = self.recognizer.recognize_google(audio)
-                print(f"[STT Transcribed]: '{text}'")
+                print(f"[STT Google Transcribed]: '{text}'")
                 return {"success": True, "text": text}
+
         except sr.UnknownValueError:
             return {"success": False, "error": "Speech was unintelligible"}
         except sr.RequestError as e:
@@ -79,15 +108,5 @@ class VoiceSTT:
                     os.unlink(wav_path)
                 except OSError:
                     pass
-
-    def transcribe_audio_file(self, audio_path: str) -> str:
-        """Transcribe an audio file to text."""
-        try:
-            with sr.AudioFile(audio_path) as source:
-                audio = self.recognizer.record(source)
-                return self.recognizer.recognize_google(audio)
-        except Exception as e:
-            print(f"[STT] Transcription error: {e}")
-            return ""
 
 stt_engine = VoiceSTT()
