@@ -4,6 +4,7 @@ import sys
 import platform
 import webbrowser
 import ctypes
+import time
 
 class MacAutomation:
     """Advanced automation adapter for macOS operations."""
@@ -61,6 +62,178 @@ class MacAutomation:
             return {"success": True, "message": f"Terminated process {clean_name}"}
         except Exception as e:
             return {"success": False, "error": str(e)}
+
+    @classmethod
+    def tile_windows(cls, app_names: list[str]) -> dict:
+        """
+        Dynamically tile 1, 2, 3, or 4 specified applications on macOS screen:
+        - 2 Apps: Side-by-side (50% Left | 50% Right)
+        - 3 Apps: 1 Left (50%) + 2 Right (Top-Right 25%, Bottom-Right 25%)
+        - 4 Apps: 2x2 Grid (Top-Left, Top-Right, Bottom-Left, Bottom-Right 25% each)
+        """
+        if not cls.is_macos():
+            return {"success": False, "error": "Not running on macOS"}
+
+        # Filter and ensure apps are launched
+        valid_apps = [a.strip() for a in app_names if a.strip()]
+        if not valid_apps:
+            return {"success": False, "error": "No apps provided to tile"}
+
+        # Launch any app that isn't running yet
+        for app in valid_apps:
+            cls.open_application(app)
+
+        time.sleep(0.6)  # Grace period for window handles to initialize
+
+        # Map common friendly app names to macOS process names
+        process_alias = {
+            "visual studio code": "Code",
+            "vs code": "Code",
+            "code": "Code",
+            "terminal": "Terminal",
+            "google chrome": "Google Chrome",
+            "chrome": "Google Chrome",
+            "safari": "Safari",
+            "spotify": "Spotify",
+            "finder": "Finder",
+            "calculator": "Calculator",
+            "slack": "Slack",
+            "discord": "Discord",
+            "notion": "Notion",
+            "notes": "Notes",
+            "messages": "Messages"
+        }
+
+        resolved_processes = [process_alias.get(a.lower(), a) for a in valid_apps[:4]]
+        count = len(resolved_processes)
+
+        script = f'''
+tell application "Finder"
+    set screenBounds to bounds of window of desktop
+    set screenWidth to item 3 of screenBounds
+    set screenHeight to item 4 of screenBounds
+end tell
+
+set menuOffset to 25
+set availHeight to screenHeight - menuOffset
+
+tell application "System Events"
+'''
+        if count == 1:
+            proc = resolved_processes[0]
+            script += f'''
+    if exists (process "{proc}") then
+        tell process "{proc}"
+            set frontmost to true
+            if (count of windows) > 0 then
+                set position of window 1 to {{0, menuOffset}}
+                set size of window 1 to {{screenWidth, availHeight}}
+            end if
+        end tell
+    end if
+'''
+        elif count == 2:
+            proc1, proc2 = resolved_processes[0], resolved_processes[1]
+            script += f'''
+    set halfWidth to screenWidth / 2
+    if exists (process "{proc1}") then
+        tell process "{proc1}"
+            set frontmost to true
+            if (count of windows) > 0 then
+                set position of window 1 to {{0, menuOffset}}
+                set size of window 1 to {{halfWidth, availHeight}}
+            end if
+        end tell
+    end if
+    if exists (process "{proc2}") then
+        tell process "{proc2}"
+            set frontmost to true
+            if (count of windows) > 0 then
+                set position of window 1 to {{halfWidth, menuOffset}}
+                set size of window 1 to {{halfWidth, availHeight}}
+            end if
+        end tell
+    end if
+'''
+        elif count == 3:
+            proc1, proc2, proc3 = resolved_processes[0], resolved_processes[1], resolved_processes[2]
+            script += f'''
+    set halfWidth to screenWidth / 2
+    set halfHeight to availHeight / 2
+    if exists (process "{proc1}") then
+        tell process "{proc1}"
+            set frontmost to true
+            if (count of windows) > 0 then
+                set position of window 1 to {{0, menuOffset}}
+                set size of window 1 to {{halfWidth, availHeight}}
+            end if
+        end tell
+    end if
+    if exists (process "{proc2}") then
+        tell process "{proc2}"
+            set frontmost to true
+            if (count of windows) > 0 then
+                set position of window 1 to {{halfWidth, menuOffset}}
+                set size of window 1 to {{halfWidth, halfHeight}}
+            end if
+        end tell
+    end if
+    if exists (process "{proc3}") then
+        tell process "{proc3}"
+            set frontmost to true
+            if (count of windows) > 0 then
+                set position of window 1 to {{halfWidth, menuOffset + halfHeight}}
+                set size of window 1 to {{halfWidth, halfHeight}}
+            end if
+        end tell
+    end if
+'''
+        elif count >= 4:
+            p1, p2, p3, p4 = resolved_processes[0], resolved_processes[1], resolved_processes[2], resolved_processes[3]
+            script += f'''
+    set halfWidth to screenWidth / 2
+    set halfHeight to availHeight / 2
+    if exists (process "{p1}") then
+        tell process "{p1}"
+            set frontmost to true
+            if (count of windows) > 0 then
+                set position of window 1 to {{0, menuOffset}}
+                set size of window 1 to {{halfWidth, halfHeight}}
+            end if
+        end tell
+    end if
+    if exists (process "{p2}") then
+        tell process "{p2}"
+            set frontmost to true
+            if (count of windows) > 0 then
+                set position of window 1 to {{halfWidth, menuOffset}}
+                set size of window 1 to {{halfWidth, halfHeight}}
+            end if
+        end tell
+    end if
+    if exists (process "{p3}") then
+        tell process "{p3}"
+            set frontmost to true
+            if (count of windows) > 0 then
+                set position of window 1 to {{0, menuOffset + halfHeight}}
+                set size of window 1 to {{halfWidth, halfHeight}}
+            end if
+        end tell
+    end if
+    if exists (process "{p4}") then
+        tell process "{p4}"
+            set frontmost to true
+            if (count of windows) > 0 then
+                set position of window 1 to {{halfWidth, menuOffset + halfHeight}}
+                set size of window 1 to {{halfWidth, halfHeight}}
+            end if
+        end tell
+    end if
+'''
+
+        script += "\nend tell"
+        res = cls.run_applescript(script)
+        return {"success": True, "message": f"Tiled {len(resolved_processes)} windows: {', '.join(valid_apps)}", "result": res}
 
     @classmethod
     def set_volume(cls, level_percent: int) -> dict:
@@ -138,15 +311,11 @@ class MacAutomation:
 
         level = max(0.0, min(1.0, level_percent / 100.0))
         try:
-            # Direct native CoreDisplay call (works instantly on all Apple Silicon & Intel Macs)
             core_display = ctypes.CDLL('/System/Library/Frameworks/CoreDisplay.framework/CoreDisplay')
             core_display.CoreDisplay_Display_SetUserBrightness.argtypes = [ctypes.c_uint32, ctypes.c_double]
-            # 1 is CGMainDisplayID
             core_display.CoreDisplay_Display_SetUserBrightness(1, float(level))
-            print(f"[MacAutomation]: Set CoreDisplay screen brightness to {level_percent}% ({level})")
             return {"success": True, "message": f"Brightness set to {level_percent}%"}
         except Exception as e:
-            print(f"[MacAutomation CoreDisplay Error]: {e}")
             return {"success": False, "error": str(e)}
 
     @classmethod
@@ -206,7 +375,6 @@ class MacAutomation:
             return {"success": False, "error": "Not running on macOS"}
         if not output_path:
             import tempfile
-            import time
             output_path = os.path.join(tempfile.gettempdir(), f"friday_screenshot_{int(time.time())}.png")
         try:
             subprocess.run(["screencapture", "-x", output_path], check=True)

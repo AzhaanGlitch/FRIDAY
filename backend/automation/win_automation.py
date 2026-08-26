@@ -352,3 +352,77 @@ class WinAutomation:
             return {"success": True, "path": abs_path}
         except Exception as e:
             return {"success": False, "error": str(e)}
+
+    @classmethod
+    def tile_windows(cls, app_names: list[str]) -> dict:
+        """Tile 1, 2, 3, or 4 windows on Windows desktop using PowerShell Win32 APIs."""
+        if not cls.is_windows():
+            return {"success": False, "error": "Not running on Windows"}
+        try:
+            valid_apps = [a.strip() for a in app_names if a.strip()][:4]
+            if not valid_apps:
+                return {"success": False, "error": "No apps specified to tile"}
+
+            # Launch any app if not running
+            for app in valid_apps:
+                cls.open_application(app)
+
+            # PowerShell script to resize and position windows using SetWindowPos
+            ps_script = f"""
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class WinPos {{
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+    [DllImport("user32.dll")]
+    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+}}
+"@
+Add-Type -AssemblyName System.Windows.Forms
+$screen = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+$sw = $screen.Width
+$sh = $screen.Height
+
+$apps = @({", ".join([f"'{a}'" for a in valid_apps])})
+$count = $apps.Count
+
+for ($i = 0; $i -lt $count; $i++) {{
+    $name = $apps[$i]
+    $proc = Get-Process | Where-Object {{ $_.MainWindowTitle -and ($_.ProcessName -match $name -or $_.MainWindowTitle -match $name) }} | Select-Object -First 1
+    if ($proc) {{
+        $hwnd = $proc.MainWindowHandle
+        [WinPos]::ShowWindow($hwnd, 9) # SW_RESTORE
+        if ($count -eq 1) {{
+            [WinPos]::SetWindowPos($hwnd, [IntPtr]::Zero, 0, 0, $sw, $sh, 0x0040)
+        }} elseif ($count -eq 2) {{
+            $w = [int]($sw / 2)
+            $x = $i * $w
+            [WinPos]::SetWindowPos($hwnd, [IntPtr]::Zero, $x, 0, $w, $sh, 0x0040)
+        }} elseif ($count -eq 3) {{
+            $halfW = [int]($sw / 2)
+            $halfH = [int]($sh / 2)
+            if ($i -eq 0) {{
+                [WinPos]::SetWindowPos($hwnd, [IntPtr]::Zero, 0, 0, $halfW, $sh, 0x0040)
+            }} elseif ($i -eq 1) {{
+                [WinPos]::SetWindowPos($hwnd, [IntPtr]::Zero, $halfW, 0, $halfW, $halfH, 0x0040)
+            }} else {{
+                [WinPos]::SetWindowPos($hwnd, [IntPtr]::Zero, $halfW, $halfH, $halfW, $halfH, 0x0040)
+            }}
+        }} elseif ($count -ge 4) {{
+            $halfW = [int]($sw / 2)
+            $halfH = [int]($sh / 2)
+            $col = $i % 2
+            $row = [Math]::Floor($i / 2)
+            $x = $col * $halfW
+            $y = $row * $halfH
+            [WinPos]::SetWindowPos($hwnd, [IntPtr]::Zero, $x, $y, $halfW, $halfH, 0x0040)
+        }}
+    }}
+}}
+"""
+            subprocess.run(["powershell", "-Command", ps_script], capture_output=True, text=True)
+            return {"success": True, "message": f"Tiled {len(valid_apps)} windows on Windows: {', '.join(valid_apps)}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+

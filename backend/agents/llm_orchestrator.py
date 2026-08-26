@@ -21,7 +21,8 @@ RULES:
    - If user speaks in English, reply in fluent English.
 4. OS Actions:
    - If user wants an OS action, output valid JSON: {"action": "<action_name>", "params": {...}, "spoken_reply": "<short reply to speak>"}
-   - Supported actions: open_app, close_app, open_url, set_volume, mute_sound, set_brightness, media_control, lock_screen, take_screenshot, terminate_system, coding_mode.
+   - Supported actions: open_app, close_app, open_url, set_volume, mute_sound, set_brightness, media_control, lock_screen, take_screenshot, terminate_system, coding_mode, tile_windows.
+   - For tile_windows: specify "apps": ["<app1>", "<app2>", ... up to 4 apps]
 5. If background noise or random talk, output EXACTLY: SILENT
 """
 
@@ -40,9 +41,9 @@ RULES:
     def _fuzzy_direct_match(cls, text_lower: str) -> dict | None:
         """
         Ultra-fast direct keyword & fuzzy regex matching (< 1ms) in both English & Hindi/Hinglish.
-        Ensures CLOSE actions take precedence over OPEN actions.
+        Ensures CLOSE & TILE actions take precedence over plain OPEN actions.
         """
-        is_hindi = any(w in text_lower for w in ["khol", "kholo", "kholdo", "chalao", "band", "kar", "kardo", "kaise", "kya", "batao", "sun", "sunao", "aawaz", "gaana", "badhao", "ghatao", "chamak"])
+        is_hindi = any(w in text_lower for w in ["khol", "kholo", "kholdo", "chalao", "band", "kar", "kardo", "kaise", "kya", "batao", "sun", "sunao", "aawaz", "gaana", "badhao", "ghatao", "chamak", "jodo", "sath"])
 
         app_map = {
             "spotify": "Spotify",
@@ -84,7 +85,27 @@ RULES:
                 "spoken_reply": reply
             }
 
-        # 2. CLOSE App Intent (Checked BEFORE Open)
+        # 2. Window Tiling Intent (e.g. "tile chrome and vs code", "tile terminal spotify chrome", "split screen vs code and terminal", "tile karo chrome aur vs code ko")
+        if any(w in text_lower for w in ["tile", "split screen", "side by side", "tile karo", "screen split", "arrange windows"]):
+            # Extract mentioned apps
+            found_apps = []
+            for app_key, app_val in app_map.items():
+                if app_key in text_lower:
+                    if app_val not in found_apps:
+                        found_apps.append(app_val)
+
+            if found_apps:
+                # Up to 4 apps
+                selected_apps = found_apps[:4]
+                app_names_str = ", ".join(selected_apps)
+                reply = f"{app_names_str} ko screen par tile kar diya hai." if is_hindi else f"Tiling {app_names_str} on your screen."
+                return {
+                    "action": "tile_windows",
+                    "params": {"apps": selected_apps},
+                    "spoken_reply": reply
+                }
+
+        # 3. CLOSE App Intent (Checked BEFORE Open)
         is_close_intent = any(w in text_lower for w in ["close", "quit", "exit", "kill", "stop", "band", "hatao", "closing"])
         if is_close_intent:
             for app_key, app_val in app_map.items():
@@ -96,7 +117,7 @@ RULES:
                         "spoken_reply": reply
                     }
 
-        # 3. Brightness Controls (English & Hindi)
+        # 4. Brightness Controls (English & Hindi)
         if any(w in text_lower for w in ["brightness", "riteness", "chamak", "screen light", "light"]):
             numbers = re.findall(r'\d+', text_lower)
             if numbers:
@@ -119,7 +140,7 @@ RULES:
                 "spoken_reply": reply
             }
 
-        # 4. OPEN App Intent
+        # 5. OPEN App Intent
         for app_key, app_val in app_map.items():
             pattern = rf'(?:open|launch|start|run|play|khol|kholo|kholdo|chalao|khol do)?\s*(?:the\s+app\s+)?\b{re.escape(app_key)}\b\s*(?:khol\s*do|kholo|chalao|open\s*kardo)?'
             if re.search(pattern, text_lower):
@@ -130,7 +151,7 @@ RULES:
                     "spoken_reply": reply
                 }
 
-        # 5. Web URL Open
+        # 6. Web URL Open
         web_domains = {
             "youtube": "youtube.com",
             "google": "google.com",
@@ -163,7 +184,7 @@ RULES:
                 "spoken_reply": f"Opening {url}."
             }
 
-        # 6. Volume Controls
+        # 7. Volume Controls
         if any(w in text_lower for w in ["volume", "sound", "aawaz", "awaaz"]):
             if any(w in text_lower for w in ["mute", "chup", "silent"]):
                 reply = "Aawaz band kar di." if is_hindi else "Muting system audio."
@@ -182,7 +203,7 @@ RULES:
             elif "kam" in text_lower or "decrease" in text_lower:
                 return {"action": "set_volume", "params": {"level": 30}, "spoken_reply": "Volume kam kar diya." if is_hindi else "Decreasing volume."}
 
-        # 7. Media Playback
+        # 8. Media Playback
         if any(w in text_lower for w in ["pause music", "pause song", "pause", "gaana roko", "roko"]):
             return {"action": "media_control", "params": {"action": "pause"}, "spoken_reply": "Gaana rok diya." if is_hindi else "Paused playback."}
         if any(w in text_lower for w in ["play music", "resume music", "play song", "resume", "gaana chalao", "chalao"]):
@@ -190,17 +211,21 @@ RULES:
         if any(w in text_lower for w in ["next song", "next track", "skip song", "agla gaana", "next gaana"]):
             return {"action": "media_control", "params": {"action": "next"}, "spoken_reply": "Agla gaana play kar rahi hoon." if is_hindi else "Skipping to next track."}
 
-        # 8. Screenshot
+        # 9. Screenshot
         if any(w in text_lower for w in ["screenshot", "screen capture", "screenshot lelo"]):
             return {"action": "take_screenshot", "params": {}, "spoken_reply": "Screenshot le liya." if is_hindi else "Screenshot captured."}
 
-        # 9. Lock screen
+        # 10. Lock screen
         if any(w in text_lower for w in ["lock screen", "lock mac", "lock kardo", "screen lock"]):
             return {"action": "lock_screen", "params": {}, "spoken_reply": "Screen lock kar rahi hoon." if is_hindi else "Locking screen."}
 
-        # 10. Coding mode
-        if any(w in text_lower for w in ["coding mode", "start coding", "coding shuru", "coding"]):
-            return {"action": "coding_mode", "params": {}, "spoken_reply": "Coding mode shuru kar diya hai." if is_hindi else "Coding mode initiated."}
+        # 11. Coding mode (Side-by-side tile: VS Code on Left 50% | Terminal on Right 50%)
+        if any(w in text_lower for w in ["coding mode", "start coding", "coding shuru", "coding", "code mode"]):
+            return {
+                "action": "coding_mode",
+                "params": {},
+                "spoken_reply": "Coding mode shuru kar diya hai. VS Code aur Terminal tile kar diye hain." if is_hindi else "Coding mode initiated. VS Code and Terminal tiled side-by-side."
+            }
 
         return None
 
@@ -279,10 +304,8 @@ RULES:
 
             # Execute intent immediately
             if action == "coding_mode":
-                res1 = SystemAutomation.execute_intent("open_app", {"app_name": "Visual Studio Code"})
-                res2 = SystemAutomation.execute_intent("open_app", {"app_name": "Terminal"})
-                res3 = SystemAutomation.execute_intent("open_url", {"url": "github.com"})
-                action_res = {"vscode": res1, "terminal": res2, "browser": res3}
+                # Launch and auto-tile VS Code (Left 50%) & Terminal (Right 50%)
+                action_res = SystemAutomation.execute_intent("tile_windows", {"apps": ["Visual Studio Code", "Terminal"]})
             elif action == "terminate_system":
                 action_res = {"terminate": True}
             else:
@@ -316,7 +339,11 @@ RULES:
                 action = parsed.get("action", "none")
                 params = parsed.get("params", {})
                 spoken = parsed.get("spoken_reply", "")
-                action_res = SystemAutomation.execute_intent(action, params)
+
+                if action == "coding_mode":
+                    action_res = SystemAutomation.execute_intent("tile_windows", {"apps": ["Visual Studio Code", "Terminal"]})
+                else:
+                    action_res = SystemAutomation.execute_intent(action, params)
 
                 MemoryDatabase.save_message("user", user_text)
                 if spoken:
