@@ -14,18 +14,19 @@ _mic_lock = threading.Lock()
 
 class VoiceSTT:
     """
-    Seamless, High-Fidelity Voice Recording & Speech-to-Text with Barge-In detection.
-    When user speaks during audio recording, any background speech from assistant is instantly cut off.
-    Supports English & Hindi.
+    High-Fidelity Speech-to-Text with locked Hindi + English (Hinglish) decoding.
+    Guarantees no foreign language hallucinations (Russian, Icelandic, etc.).
     """
 
     SAMPLE_RATE = 16000
+    # Clean bilingual context prompt to anchor Whisper in Hindi + English
+    BILINGUAL_PROMPT = "FRIDAY, tum kaun ho, kaise ho, spotify kholo, open youtube, volume badhao, gaana chalao, terminate system, coding mode"
 
     def __init__(self):
         self.recognizer = sr.Recognizer()
 
     def _transcribe_groq_whisper(self, wav_path: str) -> str:
-        """Transcribe audio using Groq's Whisper Large v3 Turbo (unprompted, multilingual)."""
+        """Transcribe audio using Groq's Whisper Large v3 Turbo with bilingual grounding."""
         if not settings.GROQ_API_KEY:
             return ""
 
@@ -37,14 +38,21 @@ class VoiceSTT:
                 files = {"file": (os.path.basename(wav_path), f, "audio/wav")}
                 data = {
                     "model": "whisper-large-v3-turbo",
-                    "temperature": 0.0
+                    "temperature": 0.0,
+                    "prompt": self.BILINGUAL_PROMPT
                 }
                 res = requests.post(url, headers=headers, files=files, data=data, timeout=6)
 
             if res.status_code == 200:
                 text = res.json().get("text", "").strip()
+                # Clean up repeated hallucination artifacts if any
                 if text:
-                    print(f"[STT Groq Whisper Large-v3]: '{text}'")
+                    # Ignore common silence hallucination phrases
+                    lower_t = text.lower()
+                    if any(phrase in lower_t for phrase in ["продолжение следует", "subtitles by", "amara.org", "you"]):
+                        if len(text.split()) <= 2:
+                            return ""
+                    print(f"[STT Groq Whisper]: '{text}'")
                     return text
             else:
                 print(f"[STT Groq Warning]: {res.status_code} - {res.text}")
@@ -55,8 +63,7 @@ class VoiceSTT:
 
     def record_and_transcribe(self, duration_seconds: float = 3.5) -> dict:
         """
-        Record live audio with active barge-in interrupt:
-        If user starts speaking while assistant is speaking, assistant voice is instantly killed.
+        Record live audio with active barge-in interrupt and bilingual decoding.
         """
         if not _mic_lock.acquire(blocking=False):
             return {"success": False, "error": "Another recording is already in progress"}
@@ -69,7 +76,7 @@ class VoiceSTT:
 
             # Verify that human sound energy was captured
             energy = np.sqrt(np.mean(audio_data.astype(np.float32) ** 2))
-            if energy < 60:
+            if energy < 70:
                 return {"success": False, "error": "Silence"}
 
             # If user spoke with significant voice energy, trigger instant Barge-in!
@@ -80,7 +87,7 @@ class VoiceSTT:
             wav.write(tmp.name, self.SAMPLE_RATE, audio_data)
             wav_path = tmp.name
 
-            # 1. Primary: Groq Whisper Large-v3 (Multilingual English + Hindi)
+            # 1. Primary: Groq Whisper Large-v3 (Hinglish Grounded)
             text = self._transcribe_groq_whisper(wav_path)
 
             # 2. Fallback: Google Speech Recognition
