@@ -6,22 +6,23 @@ from backend.automation.system_automation import SystemAutomation
 from backend.memory.database import MemoryDatabase
 
 class LLMOrchestrator:
-    """Orchestrates natural language intent parsing, fuzzy matching, and fast execution."""
+    """Orchestrates natural language intent parsing, phonetic auto-correction, and direct voice execution."""
 
-    SYSTEM_PROMPT = """You are FRIDAY (Female Replacement Intelligent Digital Assistant Youth), an ultra-smart, witty, and highly fluent AI desktop assistant like Tony Stark's FRIDAY.
+    SYSTEM_PROMPT = """You are FRIDAY (Female Replacement Intelligent Digital Assistant Youth), Tony Stark's sharp, intelligent, and highly capable AI desktop assistant.
 
-Language & Tone Rules:
-- If user speaks in Hindi or Hinglish, reply in fluent, natural conversational Hindi.
-- If user speaks in English, reply in natural fluent English.
-- Keep spoken replies concise, warm, and human-like (1-2 sentences).
-
-Command Handling Rules:
-1. If the user wants to execute any computer action (open apps, close apps, websites, volume, brightness, music, coding mode, screenshot, lock), output JSON:
-   {"action": "<action_name>", "params": {...}, "spoken_reply": "<short reply to speak>"}
-   Actions available: open_app, close_app, open_url, set_volume, mute_sound, set_brightness, media_control, lock_screen, take_screenshot, terminate_system, coding_mode.
-
-2. If the user asks a question (knowledge, advice, conversation), reply conversationally in 1-2 natural sentences.
-3. If the input is random chatter or not addressed to you, output EXACTLY: SILENT
+CRITICAL INSTRUCTIONS:
+1. Speech Auto-Correction: The user input is transcribed from speech and may contain phonetic errors or minor typos (for example, "tumhaharay paas kon kon se modes hai" means "tumhare paas kaun kaun se modes hain"). Understand the user's intended meaning automatically.
+2. Direct Natural Output ONLY:
+   - Output ONLY the final answer to speak.
+   - Do NOT output any internal thoughts, analysis, or explanations like "User said this" or "Here is the thinking".
+   - Never output markdown formatting or asterisks.
+3. Language:
+   - If the user speaks in Hindi or Hinglish, reply directly in fluent conversational Hindi.
+   - If the user speaks in English, reply in natural fluent English.
+4. OS Command Handling:
+   - If the user wants an OS action, output valid JSON: {"action": "<action_name>", "params": {...}, "spoken_reply": "<short reply to speak>"}
+   - Supported actions: open_app, close_app, open_url, set_volume, mute_sound, set_brightness, media_control, lock_screen, take_screenshot, terminate_system, coding_mode.
+5. If the input is background noise or random side-talk not addressed to you, output EXACTLY: SILENT
 """
 
     @classmethod
@@ -31,7 +32,7 @@ Command Handling Rules:
         fillers = {
             "oh", "okay", "ok", "its okay", "its ok", "oh its okay", "oh its ok",
             "umm", "um", "uh", "yeah", "yes", "no", "nah", "hmm", "hm",
-            "are there eight seconds", "testing", "nothing", "nevermind"
+            "are there eight seconds", "testing", "nothing", "nevermind", "nay", "set"
         }
         return cleaned in fillers
 
@@ -75,7 +76,7 @@ Command Handling Rules:
         }
 
         # 1. Termination (English & Hindi)
-        if any(w in text_lower for w in ["terminate the system", "terminate system", "shutdown system", "exit system", "system band kardo", "band kar do", "alvida friday"]):
+        if any(w in text_lower for w in ["terminate the system", "terminate system", "shutdown system", "exit system", "system band kardo", "band kar do", "alvida friday", "terminate"]):
             reply = "System band kar rahi hoon. Alvida sir." if is_hindi else "Terminating system. Goodbye sir."
             return {
                 "action": "terminate_system",
@@ -83,7 +84,7 @@ Command Handling Rules:
                 "spoken_reply": reply
             }
 
-        # 2. CLOSE App Intent (Checked BEFORE Open to prevent "closing spotify" from triggering open!)
+        # 2. CLOSE App Intent (Checked BEFORE Open)
         is_close_intent = any(w in text_lower for w in ["close", "quit", "exit", "kill", "stop", "band", "hatao", "closing"])
         if is_close_intent:
             for app_key, app_val in app_map.items():
@@ -96,7 +97,7 @@ Command Handling Rules:
                     }
 
         # 3. Brightness Controls (English & Hindi)
-        if "brightness" in text_lower or "chamak" in text_lower or "screen light" in text_lower:
+        if any(w in text_lower for w in ["brightness", "riteness", "chamak", "screen light", "light"]):
             numbers = re.findall(r'\d+', text_lower)
             if numbers:
                 level = int(numbers[0])
@@ -118,7 +119,7 @@ Command Handling Rules:
                 "spoken_reply": reply
             }
 
-        # 4. OPEN App Intent (Checked after Close)
+        # 4. OPEN App Intent
         for app_key, app_val in app_map.items():
             pattern = rf'(?:open|launch|start|run|play|khol|kholo|kholdo|chalao|khol do)?\s*(?:the\s+app\s+)?\b{re.escape(app_key)}\b\s*(?:khol\s*do|kholo|chalao|open\s*kardo)?'
             if re.search(pattern, text_lower):
@@ -129,7 +130,7 @@ Command Handling Rules:
                     "spoken_reply": reply
                 }
 
-        # 5. Web URL Open (English & Hindi)
+        # 5. Web URL Open
         web_domains = {
             "youtube": "youtube.com",
             "google": "google.com",
@@ -198,14 +199,14 @@ Command Handling Rules:
             return {"action": "lock_screen", "params": {}, "spoken_reply": "Screen lock kar rahi hoon." if is_hindi else "Locking screen."}
 
         # 10. Coding mode
-        if any(w in text_lower for w in ["coding mode", "start coding", "coding shuru"]):
+        if any(w in text_lower for w in ["coding mode", "start coding", "coding shuru", "coding"]):
             return {"action": "coding_mode", "params": {}, "spoken_reply": "Coding mode shuru kar diya hai." if is_hindi else "Coding mode initiated."}
 
         return None
 
     @classmethod
     def _call_groq_with_fallbacks(cls, user_text: str) -> str:
-        """Call Groq API with fallback chain."""
+        """Call Groq API and cleanly strip any model thought artifacts (<think>...</think>)."""
         if not settings.GROQ_API_KEY:
             return ""
 
@@ -225,19 +226,28 @@ Command Handling Rules:
                         {"role": "system", "content": cls.SYSTEM_PROMPT},
                         {"role": "user", "content": user_text}
                     ],
-                    "temperature": 0.4,
-                    "max_tokens": 120
+                    "temperature": 0.3,
+                    "max_tokens": 200
                 }
                 resp = requests.post(
                     "https://api.groq.com/openai/v1/chat/completions",
                     headers=headers,
                     json=payload,
-                    timeout=4
+                    timeout=5
                 )
                 if resp.status_code == 200:
                     data = resp.json()
                     content = data["choices"][0]["message"]["content"].strip()
+                    
+                    # Clean out reasoning / thinking tags completely!
+                    if "<think>" in content:
+                        content = re.sub(r'<think>[\s\S]*?</think>', '', content).strip()
+                    
+                    # Clean out markdown formatting
+                    content = content.replace("**", "").replace("`", "").strip()
+
                     if content:
+                        print(f"[LLM Groq ({model_name}) Answer]: '{content}'")
                         return content
             except Exception as e:
                 print(f"[Groq Error ({model_name})]: {e}")
@@ -246,7 +256,7 @@ Command Handling Rules:
 
     @classmethod
     def process_command(cls, user_text: str) -> dict:
-        """Process command: execute actions or reply in Hindi/English."""
+        """Process command: execute actions or reply with direct, clean answers in Hindi/English."""
         text_lower = user_text.lower().strip()
 
         # Step 1: Filter Fillers / Random Chatter
@@ -285,7 +295,7 @@ Command Handling Rules:
                 "result": action_res
             }
 
-        # Step 3: Groq LLM Intelligent Processing
+        # Step 3: Groq LLM Intelligent Processing (With speech auto-correction & direct answers)
         llm_response = cls._call_groq_with_fallbacks(user_text)
 
         # If LLM classified this as random chatter
@@ -316,7 +326,7 @@ Command Handling Rules:
             except Exception:
                 pass
 
-        # Conversational answer in Hindi/English
+        # Conversational direct answer in Hindi/English
         MemoryDatabase.save_message("user", user_text)
         MemoryDatabase.save_message("friday", llm_response, action="none")
 
