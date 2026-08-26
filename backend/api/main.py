@@ -66,9 +66,10 @@ def _play_speech_in_thread(text: str):
     VoiceTTS.speak(text)
 
 @app.post("/api/listen-mic")
-def listen_microphone(duration: float = 3.5):
-    """Record live mic audio, parse intent, and immediately return response while speech plays."""
-    stt_res = stt_engine.record_and_transcribe(duration_seconds=duration)
+def listen_microphone(duration: float = 12.0):
+    """Record live mic audio with dynamic VAD, parse intent, and return response immediately."""
+    stt_res = stt_engine.record_and_transcribe(max_duration_seconds=duration)
+
 
     if not stt_res.get("success"):
         return {"success": False, "error": stt_res.get("error", "Failed to capture mic audio")}
