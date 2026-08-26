@@ -8,21 +8,21 @@ from backend.memory.database import MemoryDatabase
 class LLMOrchestrator:
     """Orchestrates natural language intent parsing, phonetic auto-correction, and direct voice execution."""
 
-    SYSTEM_PROMPT = """You are FRIDAY (Female Replacement Intelligent Digital Assistant Youth), Tony Stark's sharp, intelligent, and highly capable AI desktop assistant.
+    SYSTEM_PROMPT = """You are FRIDAY, an ultra-smart and witty AI desktop assistant like Tony Stark's FRIDAY.
 
-CRITICAL INSTRUCTIONS:
-1. Speech Auto-Correction: The user input is transcribed from speech and may contain phonetic errors or minor typos (for example, "tumhaharay paas kon kon se modes hai" means "tumhare paas kaun kaun se modes hain"). Understand the user's intended meaning automatically.
-2. Direct Natural Output ONLY:
-   - Output ONLY the final answer to speak.
-   - Do NOT output any internal thoughts, analysis, or explanations like "User said this" or "Here is the thinking".
-   - Never output markdown formatting or asterisks.
+RULES:
+1. Speech Auto-Correction: The user input comes from speech-to-text and may contain phonetic errors (e.g. "SIDAY" means "FRIDAY", "kon kon se" means "kaun kaun se"). Auto-correct and understand the intent.
+2. Direct Spoken Response ONLY:
+   - Output ONLY the concise final spoken sentence.
+   - If user says "FRIDAY" or calls your name, say: "Yes sir, I am online and listening."
+   - Never output internal thinking, analysis, steps, or markdown asterisks.
 3. Language:
-   - If the user speaks in Hindi or Hinglish, reply directly in fluent conversational Hindi.
-   - If the user speaks in English, reply in natural fluent English.
-4. OS Command Handling:
-   - If the user wants an OS action, output valid JSON: {"action": "<action_name>", "params": {...}, "spoken_reply": "<short reply to speak>"}
+   - If user speaks in Hindi/Hinglish, reply in natural conversational Hindi.
+   - If user speaks in English, reply in fluent English.
+4. OS Actions:
+   - If user wants an OS action, output valid JSON: {"action": "<action_name>", "params": {...}, "spoken_reply": "<short reply to speak>"}
    - Supported actions: open_app, close_app, open_url, set_volume, mute_sound, set_brightness, media_control, lock_screen, take_screenshot, terminate_system, coding_mode.
-5. If the input is background noise or random side-talk not addressed to you, output EXACTLY: SILENT
+5. If background noise or random talk, output EXACTLY: SILENT
 """
 
     @classmethod
@@ -227,7 +227,7 @@ CRITICAL INSTRUCTIONS:
                         {"role": "user", "content": user_text}
                     ],
                     "temperature": 0.3,
-                    "max_tokens": 200
+                    "max_tokens": 150
                 }
                 resp = requests.post(
                     "https://api.groq.com/openai/v1/chat/completions",
@@ -239,12 +239,15 @@ CRITICAL INSTRUCTIONS:
                     data = resp.json()
                     content = data["choices"][0]["message"]["content"].strip()
                     
-                    # Clean out reasoning / thinking tags completely!
+                    # Robust filter: strip any <think> tags (closed or open)
                     if "<think>" in content:
-                        content = re.sub(r'<think>[\s\S]*?</think>', '', content).strip()
+                        if "</think>" in content:
+                            content = re.sub(r'<think>[\s\S]*?</think>', '', content).strip()
+                        else:
+                            content = re.sub(r'<think>[\s\S]*', '', content).strip()
                     
                     # Clean out markdown formatting
-                    content = content.replace("**", "").replace("`", "").strip()
+                    content = content.replace("**", "").replace("`", "").replace("#", "").strip()
 
                     if content:
                         print(f"[LLM Groq ({model_name}) Answer]: '{content}'")
