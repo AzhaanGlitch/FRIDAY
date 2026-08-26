@@ -7,9 +7,9 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri",
-    "desktop:dev": "tauri dev",
-    "desktop:build": "tauri build"
+    "tauri": "npx @tauri-apps/cli",
+    "desktop:dev": "npx @tauri-apps/cli dev",
+    "desktop:build": "npx @tauri-apps/cli build"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
