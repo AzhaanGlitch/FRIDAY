@@ -68,9 +68,9 @@ def clear_history():
     return MemoryDatabase.clear_history()
 
 @app.post("/api/listen-mic")
-def listen_microphone(duration: int = 7):
-    """Record live mic audio for X seconds, transcribe to command, and execute."""
-    stt_res = stt_engine.record_and_transcribe(duration_seconds=duration)
+def listen_microphone(duration: int = 5):
+    """Record live mic audio with VAD silence detection, transcribe to command, and execute."""
+    stt_res = stt_engine.record_and_transcribe(max_duration_seconds=duration)
     if not stt_res.get("success"):
         return {"success": False, "error": stt_res.get("error", "Failed to capture mic audio")}
     
@@ -81,7 +81,7 @@ def listen_microphone(duration: int = 7):
     tts_duration_ms = 0
     if response.get("text_response"):
         text_resp = response["text_response"]
-        tts_duration_ms = max(3000, len(text_resp) * 65)
+        tts_duration_ms = max(1200, int(len(text_resp) * 45))
         threading.Thread(target=VoiceTTS.speak, args=(text_resp,), daemon=True).start()
         
     return {
