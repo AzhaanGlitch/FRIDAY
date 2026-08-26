@@ -16,7 +16,7 @@ export type GradientOrbConfig = {
 const defaults: Required<GradientOrbConfig> = {
   background: "#07090e",
   hue: 0,
-  rotationSpeed: 0.3,
+  rotationSpeed: 0.25,
   noiseScale: 0.65,
   innerRadius: 0.1,
 };
@@ -131,23 +131,23 @@ const fragmentShader = /* glsl */ `
     float len = length(uv);
     float invLen = len > 0.0 ? 1.0 / len : 0.0;
 
-    // Synchronized Speech undulation & breathing pulse
-    float speechWave = sin(iTime * 14.0) * cos(iTime * 8.0) * voiceDistortion;
-    float pulse = (sin(iTime * pulseSpeed) * pulseAmp) + speechWave;
+    // Elegant, smooth breathing pulse and harmonic voice expansion
+    float speechPulse = sin(iTime * 2.2) * 0.035 * voiceDistortion;
+    float pulse = (sin(iTime * pulseSpeed) * pulseAmp) + speechPulse;
 
-    float n0 = snoise3(vec3(uv * (noiseScale + voiceDistortion * 0.4), iTime * (0.5 + voiceDistortion * 1.5))) * 0.5 + 0.5;
+    float n0 = snoise3(vec3(uv * (noiseScale + voiceDistortion * 0.15), iTime * (0.35 + voiceDistortion * 0.4))) * 0.5 + 0.5;
 
     float r0 = mix(mix(innerRadius + pulse, 1.0, 0.4), mix(innerRadius + pulse, 1.0, 0.6), n0);
 
     float d0 = distance(uv, (r0 * invLen) * uv);
-    float v0 = light1(1.0 + voiceDistortion * 0.8, 10.0, d0);
+    float v0 = light1(1.0 + voiceDistortion * 0.4, 10.0, d0);
     v0 *= smoothstep(r0 * 1.05, r0, len);
-    float cl = cos(atan(uv.y, uv.x) + iTime * (2.0 + voiceDistortion * 3.0)) * 0.5 + 0.5;
+    float cl = cos(atan(uv.y, uv.x) + iTime * (1.2 + voiceDistortion * 0.8)) * 0.5 + 0.5;
 
-    float a = iTime * -1.0;
+    float a = iTime * -0.7;
     vec2 pos = vec2(cos(a), sin(a)) * r0;
     float d = distance(uv, pos);
-    float v1 = light2(1.5 + voiceDistortion * 1.2, 5.0, d);
+    float v1 = light2(1.5 + voiceDistortion * 0.6, 5.0, d);
     v1 *= light1(1.0, 50.0, d0);
 
     float v2 = smoothstep(1.0, mix(innerRadius, 1.0, n0 * 0.5), len);
@@ -245,7 +245,7 @@ export const GradientOrb: React.FC<{
       rot: { value: 0 },
       noiseScale: { value: config.noiseScale },
       innerRadius: { value: config.innerRadius },
-      pulseSpeed: { value: 1.5 },
+      pulseSpeed: { value: 1.2 },
       pulseAmp: { value: 0.02 },
       voiceDistortion: { value: 0.0 },
       color0: { value: curC0 },
@@ -293,49 +293,49 @@ export const GradientOrb: React.FC<{
       const state = voiceStateRef.current;
 
       let targetPalette = whitePalette;
-      let rotSpeed = config.rotationSpeed;
-      let targetPulseSpeed = 1.5;
-      let targetPulseAmp = 0.02;
+      let rotSpeed = 0.2;
+      let targetPulseSpeed = 1.0;
+      let targetPulseAmp = 0.015;
       let targetVoiceDistortion = 0.0;
 
       if (state === 'idle' || state === 'wakeword') {
-        // White on Idle / Standby
+        // White on Idle / Standby: Slow graceful breathing
         targetPalette = whitePalette;
-        rotSpeed = 0.25;
-        targetPulseSpeed = 1.2;
+        rotSpeed = 0.18;
+        targetPulseSpeed = 1.0;
         targetPulseAmp = 0.015;
         targetVoiceDistortion = 0.0;
       } else if (state === 'listening') {
-        // Subtle ripple while listening to user
+        // Listening: Smooth gentle rhythm
         targetPalette = activeGradientPalette;
-        rotSpeed = 0.55;
-        targetPulseSpeed = 3.0;
-        targetPulseAmp = 0.04;
-        targetVoiceDistortion = 0.03;
+        rotSpeed = 0.28;
+        targetPulseSpeed = 1.6;
+        targetPulseAmp = 0.025;
+        targetVoiceDistortion = 0.2;
       } else if (state === 'speaking') {
-        // Active Voice Speech Synchronized Fluid Wave Animation
+        // Speaking: Elegant, smooth, natural fluid voice breathing
         targetPalette = activeGradientPalette;
-        rotSpeed = 1.2;
-        targetPulseSpeed = 7.0;
-        targetPulseAmp = 0.09;
-        targetVoiceDistortion = 0.12; // High expressive audio-wave rippling
+        rotSpeed = 0.45;
+        targetPulseSpeed = 2.4;
+        targetPulseAmp = 0.045;
+        targetVoiceDistortion = 0.85; // Natural smooth pulse expansion
       } else if (state === 'terminated') {
         // Red on Termination
         targetPalette = terminatedPalette;
-        rotSpeed = 0.1;
-        targetPulseSpeed = 0.8;
+        rotSpeed = 0.08;
+        targetPulseSpeed = 0.6;
         targetPulseAmp = 0.01;
         targetVoiceDistortion = 0.0;
       }
 
       // Smooth color transitions between palettes
-      curC0.lerp(targetPalette.c0, 0.08);
-      curC1.lerp(targetPalette.c1, 0.08);
-      curC2.lerp(targetPalette.c2, 0.08);
-      curC3.lerp(targetPalette.c3, 0.08);
+      curC0.lerp(targetPalette.c0, 0.05);
+      curC1.lerp(targetPalette.c1, 0.05);
+      curC2.lerp(targetPalette.c2, 0.05);
+      curC3.lerp(targetPalette.c3, 0.05);
 
-      currentVoiceDistortion += (targetVoiceDistortion - currentVoiceDistortion) * 0.1;
-      currentRot += 0.01 * rotSpeed;
+      currentVoiceDistortion += (targetVoiceDistortion - currentVoiceDistortion) * 0.06;
+      currentRot += 0.008 * rotSpeed;
 
       uniforms.iTime.value = t;
       uniforms.rot.value = currentRot;

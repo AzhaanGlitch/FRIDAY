@@ -1,24 +1,22 @@
-import sys
-import os
-import threading
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-
-# Ensure backend folder is in path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
-
-from backend.config.config import settings
+import threading
+import asyncio
 from backend.agents.llm_orchestrator import LLMOrchestrator
+from backend.automation.system_automation import SystemAutomation
+from backend.voice.wakeword import WakeWordDetector
+from backend.voice.stt import VoiceSTT
 from backend.voice.tts import VoiceTTS
-from backend.voice.stt import stt_engine
-from backend.automation.system_monitor import SystemMonitor
 from backend.memory.database import MemoryDatabase
+from backend.config.config import settings
 
-app = FastAPI(title=settings.APP_NAME, version=settings.VERSION)
+app = FastAPI(title="F.R.I.D.A.Y. AI Assistant Backend")
 
+# Initialize persistent memory database
+MemoryDatabase.init_db()
 
-# Enable CORS for desktop frontend
+# Enable CORS for frontend Desktop GUI
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -27,37 +25,33 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+stt_engine = VoiceSTT()
+_active_ws_clients: set[WebSocket] = set()
+
+async def broadcast_ws(event: dict):
+    """Broadcast real-time voice state events to UI."""
+    for ws in list(_active_ws_clients):
+        try:
+            await ws.send_json(event)
+        except Exception:
+            _active_ws_clients.discard(ws)
+
 class CommandRequest(BaseModel):
     command: str
     speak_response: bool = True
 
-@app.get("/")
-def root():
-    return {
-        "status": "online",
-        "app": settings.APP_NAME,
-        "version": settings.VERSION
-    }
-
 @app.get("/api/health")
 def health_check():
-    return {"status": "healthy", "service": "FRIDAY Core API"}
-
-@app.get("/api/system-status")
-def get_system_status():
-    """Return live system telemetry (CPU, RAM, Disk, Battery)."""
-    return SystemMonitor.get_metrics()
+    """Health check endpoint."""
+    return {"status": "online", "model": settings.LLM_PROVIDER}
 
 @app.get("/api/wait-wakeword")
 def wait_for_wakeword(timeout: int = 15):
-    """Wait for 'FRIDAY' wake word trigger."""
-    from backend.voice.wakeword import WakeWordDetector
+    """Block until wake word 'FRIDAY' is heard with high sensitivity."""
     woken = WakeWordDetector.detect_wakeword(timeout_seconds=timeout)
     return {"success": woken, "woken": woken}
 
-
 @app.get("/api/history")
-
 def get_history(limit: int = 50):
     """Retrieve recent conversation history from SQLite database."""
     return {"success": True, "history": MemoryDatabase.get_recent_history(limit=limit)}
@@ -67,9 +61,13 @@ def clear_history():
     """Clear stored conversation history."""
     return MemoryDatabase.clear_history()
 
+def _play_speech_in_thread(text: str):
+    """Helper to synthesize and play speech with exact active state tracking."""
+    VoiceTTS.speak(text)
+
 @app.post("/api/listen-mic")
 def listen_microphone(duration: float = 3.5):
-    """Record clean live mic audio, transcribe with Groq Whisper, and execute."""
+    """Record live mic audio, parse intent, and immediately return response while speech plays."""
     stt_res = stt_engine.record_and_transcribe(duration_seconds=duration)
 
     if not stt_res.get("success"):
@@ -78,11 +76,11 @@ def listen_microphone(duration: float = 3.5):
     user_command = stt_res.get("text", "")
     response = LLMOrchestrator.process_command(user_command)
 
-    # Speak response synchronously so frontend stays in 'speaking' animation during exact voice playback
-    if response.get("text_response"):
-        text_resp = response["text_response"]
-        VoiceTTS.speak(text_resp)
-        
+    # If there is a text response, launch TTS in background thread immediately
+    text_resp = response.get("text_response", "")
+    if text_resp:
+        threading.Thread(target=_play_speech_in_thread, args=(text_resp,), daemon=True).start()
+
     return {
         "success": True,
         "transcribed_command": user_command,
@@ -100,25 +98,21 @@ def interrupt_speech():
     VoiceTTS.stop_speaking()
     return {"success": True, "interrupted": True}
 
-
-
-
-
 @app.post("/api/command")
 def execute_command(req: CommandRequest):
     """Process natural language command over REST."""
     response = LLMOrchestrator.process_command(req.command)
     
     if req.speak_response and response.get("text_response"):
-        # Run TTS in background thread so REST response is not blocked
         threading.Thread(target=VoiceTTS.speak, args=(response["text_response"],), daemon=True).start()
         
     return response
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    """Realtime WebSocket endpoint for low-latency communication."""
+    """Realtime WebSocket endpoint for low-latency state and communication."""
     await websocket.accept()
+    _active_ws_clients.add(websocket)
     await websocket.send_json({
         "type": "status",
         "message": "Connected to FRIDAY AI Backend"
@@ -135,7 +129,6 @@ async def websocket_endpoint(websocket: WebSocket):
                 
                 res = LLMOrchestrator.process_command(text_input)
                 
-                # Send response to UI immediately (never block on TTS)
                 await websocket.send_json({
                     "type": "response",
                     "content": res.get("text_response", ""),
@@ -143,10 +136,14 @@ async def websocket_endpoint(websocket: WebSocket):
                     "result": res.get("result", {})
                 })
 
-                # Run TTS in background thread AFTER sending response
                 if speak and res.get("text_response"):
                     threading.Thread(target=VoiceTTS.speak, args=(res["text_response"],), daemon=True).start()
-                
-    except WebSocketDisconnect:
-        print("[WebSocket] Client disconnected")
+                    
+    except Exception:
+        pass
+    finally:
+        _active_ws_clients.discard(websocket)
 
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("backend.api.main:app", host=settings.HOST, port=settings.PORT, reload=True)
