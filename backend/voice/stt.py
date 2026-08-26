@@ -61,11 +61,14 @@ class VoiceSTT:
 
         return ""
 
-    def record_and_transcribe(self, max_duration_seconds: float = 12.0) -> dict:
+    def record_and_transcribe(self, max_duration_seconds: float = 12.0, duration_seconds: float = None, **kwargs) -> dict:
         """
         Record live audio with Dynamic Speech Activity Detection (VAD).
         Keeps recording while user is speaking, stops automatically after 1.2s silence pause.
         """
+        if duration_seconds is not None:
+            max_duration_seconds = duration_seconds
+
         if not _mic_lock.acquire(blocking=False):
             return {"success": False, "error": "Another recording is already in progress"}
 
