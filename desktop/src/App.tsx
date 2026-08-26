@@ -3,7 +3,7 @@ import React, { useEffect, useState, useRef } from 'react';
 export const App: React.FC = () => {
   const [voiceState, setVoiceState] = useState<'idle' | 'wakeword' | 'listening' | 'speaking' | 'terminated'>('idle');
   const [statusText, setStatusText] = useState('STANDBY MODE: Say "FRIDAY" to Wake Up');
-  const [liveTranscript, setLiveTranscript] = useState<string>('System online. Awaiting voice trigger.');
+  const [liveTranscript, setLiveTranscript] = useState<string>('System online. Awaiting wake word "FRIDAY"...');
   const wsRef = useRef<WebSocket | null>(null);
   const isRunningRef = useRef(true);
   const loopActiveRef = useRef(false);
@@ -35,7 +35,7 @@ export const App: React.FC = () => {
       return;
     }
 
-    // Step 1: Standby / Awaiting 'FRIDAY' Wake Word
+    // Step 1: Initial Standby / Awaiting 'FRIDAY' Wake Word
     setVoiceState('wakeword');
     setStatusText('STANDBY MODE: Say "FRIDAY" to Wake Up');
 
@@ -45,11 +45,11 @@ export const App: React.FC = () => {
       if (!isRunningRef.current) { loopActiveRef.current = false; return; }
 
       if (wakeRes.success && wakeRes.woken) {
-        // Step 2: Wake Word Confirmed -> Active Voice Listening
-        setLiveTranscript('Heard: "FRIDAY" → Listening for your command...');
-        await startActiveListeningCycle();
+        // Step 2: Wake Word Confirmed -> Enter Infinite Active Listening Loop
+        setLiveTranscript('Heard: "FRIDAY" → System ACTIVE & Listening continuously...');
+        await startContinuousActiveListeningLoop();
       } else {
-        // Continue loop
+        // Continue standby check
         setTimeout(() => runVoiceLoop(), 100);
       }
     } catch (err) {
@@ -58,61 +58,60 @@ export const App: React.FC = () => {
     }
   };
 
-  const startActiveListeningCycle = async () => {
-    if (!isRunningRef.current) { loopActiveRef.current = false; return; }
+  /**
+   * Infinite Active Listening Loop:
+   * Once woken up by "FRIDAY", it stays in active listening mode continuously.
+   * Even if you pause or don't speak for 5 seconds, it continues listening without dropping to standby.
+   * Only exits if you say "Terminate the system".
+   */
+  const startContinuousActiveListeningLoop = async () => {
+    while (isRunningRef.current) {
+      setVoiceState('listening');
+      setStatusText('F.R.I.D.A.Y. ACTIVE: Listening for your command...');
 
-    setVoiceState('listening');
-    setStatusText('LISTENING FOR COMMAND...');
+      try {
+        const data = await fetch('http://localhost:8000/api/listen-mic?duration=4.5', { method: 'POST' }).then(r => r.json());
 
-    try {
-      const data = await fetch('http://localhost:8000/api/listen-mic?duration=6', { method: 'POST' }).then(r => r.json());
+        if (!isRunningRef.current) break;
 
-      if (!isRunningRef.current) { loopActiveRef.current = false; return; }
+        if (data.success && data.response?.text_response) {
+          const text = data.response.text_response;
+          const action = data.response.action_executed;
+          const transcribed = data.transcribed_command || '';
 
-      if (data.success && data.response?.text_response) {
-        const text = data.response.text_response;
-        const action = data.response.action_executed;
-        const transcribed = data.transcribed_command || '';
+          // Live HUD display update (bottom left)
+          setLiveTranscript(`Heard: "${transcribed}" → ${action !== 'none' ? `[Action: ${action}]` : 'Conversational'}`);
 
-        // Live HUD display update (bottom left)
-        setLiveTranscript(transcribed ? `Heard: "${transcribed}" → ${action !== 'none' ? `[Action: ${action}]` : 'Conversational'}` : text);
+          // Check Termination Command
+          if (action === 'terminate_system' || text.toLowerCase().includes('terminating system')) {
+            setVoiceState('terminated');
+            setStatusText('SYSTEM TERMINATED. GOODBYE SIR.');
+            setLiveTranscript('System terminated.');
+            isRunningRef.current = false;
+            loopActiveRef.current = false;
+            try {
+              window.close();
+            } catch (e) {}
+            return;
+          }
 
-        // Check Termination
-        if (action === 'terminate_system' || text.toLowerCase().includes('terminating system')) {
-          setVoiceState('terminated');
-          setStatusText('SYSTEM TERMINATED. GOODBYE SIR.');
-          setLiveTranscript('System terminated.');
-          isRunningRef.current = false;
-          loopActiveRef.current = false;
-          try {
-            window.close();
-          } catch (e) {}
-          return;
+          // Speaking state
+          setVoiceState('speaking');
+          setStatusText(`FRIDAY: "${text}"`);
+
+          const speakDuration = data.tts_duration_ms || Math.max(1000, text.length * 40);
+          await new Promise(resolve => setTimeout(resolve, speakDuration));
+
+          // Immediately loop back to listening for next command
+          continue;
+        } else {
+          // No sound / silence in this window -> update HUD but STAY in active listening mode!
+          setLiveTranscript('Listening... (Say any command or "Terminate the system")');
+          await new Promise(resolve => setTimeout(resolve, 200));
         }
-
-        // Speaking state
-        setVoiceState('speaking');
-        setStatusText(`FRIDAY: "${text}"`);
-
-        const speakDuration = data.tts_duration_ms || Math.max(1000, text.length * 40);
-        await new Promise(resolve => setTimeout(resolve, speakDuration));
-
-        if (isRunningRef.current) {
-          await startActiveListeningCycle();
-        }
-      } else {
-        // No command caught -> return to standby
-        setLiveTranscript('No input heard. Returning to standby.');
-        await new Promise(resolve => setTimeout(resolve, 300));
-        if (isRunningRef.current) {
-          runVoiceLoop();
-        }
-      }
-    } catch (err) {
-      console.error('Mic Listening Error:', err);
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      if (isRunningRef.current) {
-        runVoiceLoop();
+      } catch (err) {
+        console.error('Mic Listening Error:', err);
+        await new Promise(resolve => setTimeout(resolve, 800));
       }
     }
   };
@@ -212,7 +211,7 @@ export const App: React.FC = () => {
         position: 'fixed',
         bottom: '16px',
         left: '20px',
-        maxWidth: '380px',
+        maxWidth: '420px',
         fontSize: '11px',
         fontFamily: 'monospace',
         color: '#94a3b8',
