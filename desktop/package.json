@@ -12,13 +12,16 @@
     "desktop:build": "npx @tauri-apps/cli build"
   },
   "dependencies": {
+    "@react-three/drei": "^10.7.8",
+    "@react-three/fiber": "^9.7.0",
     "@tauri-apps/api": "^2.0.0",
     "@types/three": "^0.185.4",
     "framer-motion": "^13.1.1",
     "lucide-react": "^0.344.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "three": "^0.185.1"
+    "three": "^0.185.1",
+    "three-stdlib": "^2.36.1"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",

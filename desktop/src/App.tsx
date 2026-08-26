@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { HolographicReactor } from './components/HolographicReactor';
+import { GeometricOrb } from './components/GeometricOrb';
 
 export const App: React.FC = () => {
   const [voiceState, setVoiceState] = useState<'idle' | 'wakeword' | 'listening' | 'speaking' | 'terminated'>('idle');
@@ -117,9 +117,9 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="jarvis-container">
-      {/* 3D Holographic React + Three.js + Framer Motion Arc Reactor Core */}
-      <HolographicReactor voiceState={voiceState} />
+    <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: '#07090e', position: 'relative' }}>
+      {/* 3D Geometric Orb (Audio-Reactive Line Mesh) */}
+      <GeometricOrb voiceState={voiceState} />
 
       {/* Subtle Greyish Bottom-Left Status HUD */}
       <div style={{
@@ -130,14 +130,17 @@ export const App: React.FC = () => {
         fontSize: '11px',
         fontFamily: 'monospace',
         color: '#94a3b8',
-        opacity: 0.65,
+        opacity: 0.7,
         letterSpacing: '0.5px',
         lineHeight: 1.4,
         pointerEvents: 'none',
         zIndex: 50,
-        textShadow: '0 1px 2px rgba(0,0,0,0.8)'
+        textShadow: '0 1px 3px rgba(0,0,0,0.9)'
       }}>
-        <span style={{ color: '#38bdf8', opacity: 0.8 }}>● FRIDAY_CORE:</span> {liveTranscript}
+        <span style={{ color: voiceState === 'speaking' ? '#c084fc' : voiceState === 'listening' ? '#00f2ff' : '#38bdf8', opacity: 0.9 }}>
+          ● FRIDAY_CORE ({voiceState.toUpperCase()}):
+        </span>{' '}
+        {liveTranscript}
       </div>
     </div>
   );
