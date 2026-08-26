@@ -23,10 +23,12 @@ RULES:
    - If user speaks in English, reply in fluent English.
 4. OS Actions:
    - If user wants an OS action, output valid JSON: {"action": "<action_name>", "params": {...}, "spoken_reply": "<short reply to speak>"}
-   - Supported actions: open_app, close_app, open_url, set_volume, mute_sound, set_brightness, media_control, lock_screen, take_screenshot, terminate_system, coding_mode, tile_windows.
+   - Supported actions: open_app, close_app, open_url, set_volume, mute_sound, set_brightness, media_control, lock_screen, take_screenshot, terminate_system, coding_mode, tile_windows, tile_positions.
    - For tile_windows: specify "apps": ["<app1>", "<app2>", ... up to 4 apps]
+   - For tile_positions (positional placement like "chrome left me, vs code top right me, terminal bottom right me"): specify "positions": {"left": "Google Chrome", "right": "...", "top_left": "...", "top_right": "Visual Studio Code", "bottom_left": "...", "bottom_right": "Terminal"}
 5. If background noise or random talk, output EXACTLY: SILENT
 """
+
 
     @classmethod
     def _is_random_or_filler(cls, text_lower: str) -> bool:
@@ -87,9 +89,38 @@ RULES:
                 "spoken_reply": reply
             }
 
-        # 2. Window Tiling Intent (e.g. "tile chrome and vs code", "tile terminal spotify chrome", "split screen vs code and terminal", "tile karo chrome aur vs code ko")
+        # 2. Positional Tiling Intent (e.g. "chrome left me dalo, vs code top right me, terminal bottom right me")
+        has_pos_keyword = any(w in text_lower for w in ["top right", "top left", "bottom right", "bottom left", "left me", "right me", "left side", "right side", "upar", "neeche"])
+        if has_pos_keyword:
+            slots = {}
+            for app_key, app_val in app_map.items():
+                if app_key in text_lower:
+                    idx = text_lower.find(app_key)
+                    # Look at context around the app name
+                    context = text_lower[max(0, idx - 25):min(len(text_lower), idx + len(app_key) + 25)]
+                    if "top right" in context or "upar right" in context:
+                        slots["top_right"] = app_val
+                    elif "top left" in context or "upar left" in context:
+                        slots["top_left"] = app_val
+                    elif "bottom right" in context or "neeche right" in context:
+                        slots["bottom_right"] = app_val
+                    elif "bottom left" in context or "neeche left" in context:
+                        slots["bottom_left"] = app_val
+                    elif "left" in context or "bayein" in context:
+                        slots["left"] = app_val
+                    elif "right" in context or "dayein" in context:
+                        slots["right"] = app_val
+
+            if slots:
+                spoken = "Aapke bataye hisaab se windows tile kar diye hain." if is_hindi else "Positionally tiled your applications."
+                return {
+                    "action": "tile_positions",
+                    "params": {"positions": slots},
+                    "spoken_reply": spoken
+                }
+
+        # 3. Plain Multi-App Tiling (e.g. "tile chrome and vs code", "tile terminal spotify chrome", "split screen vs code and terminal")
         if any(w in text_lower for w in ["tile", "split screen", "side by side", "tile karo", "screen split", "arrange windows"]):
-            # Extract mentioned apps
             found_apps = []
             for app_key, app_val in app_map.items():
                 if app_key in text_lower:
@@ -97,7 +128,6 @@ RULES:
                         found_apps.append(app_val)
 
             if found_apps:
-                # Up to 4 apps
                 selected_apps = found_apps[:4]
                 app_names_str = ", ".join(selected_apps)
                 reply = f"{app_names_str} ko screen par tile kar diya hai." if is_hindi else f"Tiling {app_names_str} on your screen."
@@ -106,6 +136,7 @@ RULES:
                     "params": {"apps": selected_apps},
                     "spoken_reply": reply
                 }
+
 
         # 3. CLOSE App Intent (Checked BEFORE Open)
         is_close_intent = any(w in text_lower for w in ["close", "quit", "exit", "kill", "stop", "band", "hatao", "closing"])

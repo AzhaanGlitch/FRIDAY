@@ -426,3 +426,65 @@ for ($i = 0; $i -lt $count; $i++) {{
         except Exception as e:
             return {"success": False, "error": str(e)}
 
+    @classmethod
+    def tile_positions(cls, positions: dict) -> dict:
+        """Tile specific named apps into designated positions on Windows screen."""
+        if not cls.is_windows():
+            return {"success": False, "error": "Not running on Windows"}
+        try:
+            for app in positions.values():
+                if app:
+                    cls.open_application(app)
+
+            pos_json = json.dumps(positions)
+            ps_script = f"""
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class WinPos2 {{
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+    [DllImport("user32.dll")]
+    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+}}
+"@
+Add-Type -AssemblyName System.Windows.Forms
+$screen = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+$sw = $screen.Width
+$sh = $screen.Height
+$halfW = [int]($sw / 2)
+$halfH = [int]($sh / 2)
+
+$positions = ConvertFrom-Json '{pos_json}'
+
+foreach ($prop in $positions.PSObject.Properties) {{
+    $slot = $prop.Name
+    $name = $prop.Value
+    if ($name) {{
+        $proc = Get-Process | Where-Object {{ $_.MainWindowTitle -and ($_.ProcessName -match $name -or $_.MainWindowTitle -match $name) }} | Select-Object -First 1
+        if ($proc) {{
+            $hwnd = $proc.MainWindowHandle
+            [WinPos2]::ShowWindow($hwnd, 9)
+            if ($slot -eq "left") {{
+                [WinPos2]::SetWindowPos($hwnd, [IntPtr]::Zero, 0, 0, $halfW, $sh, 0x0040)
+            }} elseif ($slot -eq "right") {{
+                [WinPos2]::SetWindowPos($hwnd, [IntPtr]::Zero, $halfW, 0, $halfW, $sh, 0x0040)
+            }} elseif ($slot -eq "top_left") {{
+                [WinPos2]::SetWindowPos($hwnd, [IntPtr]::Zero, 0, 0, $halfW, $halfH, 0x0040)
+            }} elseif ($slot -eq "top_right") {{
+                [WinPos2]::SetWindowPos($hwnd, [IntPtr]::Zero, $halfW, 0, $halfW, $halfH, 0x0040)
+            }} elseif ($slot -eq "bottom_left") {{
+                [WinPos2]::SetWindowPos($hwnd, [IntPtr]::Zero, 0, $halfH, $halfW, $halfH, 0x0040)
+            }} elseif ($slot -eq "bottom_right") {{
+                [WinPos2]::SetWindowPos($hwnd, [IntPtr]::Zero, $halfW, $halfH, $halfW, $halfH, 0x0040)
+            }}
+        }}
+    }}
+}}
+"""
+            subprocess.run(["powershell", "-Command", ps_script], capture_output=True, text=True)
+            return {"success": True, "message": "Positionally tiled windows on Windows"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+

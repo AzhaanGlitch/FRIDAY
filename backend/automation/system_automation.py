@@ -63,6 +63,11 @@ class SystemAutomation:
             apps = params.get("apps", [])
             return MacAutomation.tile_windows(apps) if is_mac else WinAutomation.tile_windows(apps) if is_win else {"success": False, "error": f"Unsupported platform: {sys.platform}"}
 
+        elif intent == "tile_positions":
+            positions = params.get("positions", params)
+            return MacAutomation.tile_positions(positions) if is_mac else WinAutomation.tile_positions(positions) if is_win else {"success": False, "error": f"Unsupported platform: {sys.platform}"}
+
+
 
         elif intent == "take_screenshot":
             return MacAutomation.take_screenshot() if is_mac else WinAutomation.take_screenshot() if is_win else {"success": False, "error": f"Unsupported platform: {sys.platform}"}

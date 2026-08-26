@@ -236,6 +236,86 @@ tell application "System Events"
         return {"success": True, "message": f"Tiled {len(resolved_processes)} windows: {', '.join(valid_apps)}", "result": res}
 
     @classmethod
+    def tile_positions(cls, positions: dict) -> dict:
+        """
+        Tile specific apps directly into designated named screen slots:
+        - "left": 50% Left (full height)
+        - "right": 50% Right (full height)
+        - "top_left": 25% Top-Left
+        - "top_right": 25% Top-Right
+        - "bottom_left": 25% Bottom-Left
+        - "bottom_right": 25% Bottom-Right
+        """
+        if not cls.is_macos():
+            return {"success": False, "error": "Not running on macOS"}
+
+        process_alias = {
+            "visual studio code": "Code", "vs code": "Code", "code": "Code",
+            "terminal": "Terminal", "google chrome": "Google Chrome", "chrome": "Google Chrome",
+            "safari": "Safari", "spotify": "Spotify", "finder": "Finder",
+            "calculator": "Calculator", "slack": "Slack", "discord": "Discord",
+            "notion": "Notion", "notes": "Notes", "messages": "Messages"
+        }
+
+        # Launch all mentioned apps first
+        for app in positions.values():
+            if app:
+                cls.open_application(app)
+
+        time.sleep(0.5)
+
+        script = '''
+tell application "Finder"
+    set screenBounds to bounds of window of desktop
+    set screenWidth to item 3 of screenBounds
+    set screenHeight to item 4 of screenBounds
+end tell
+
+set menuOffset to 25
+set availHeight to screenHeight - menuOffset
+set halfWidth to screenWidth / 2
+set halfHeight to availHeight / 2
+
+tell application "System Events"
+'''
+        # Position mapping
+        for slot, app_raw in positions.items():
+            if not app_raw:
+                continue
+            proc = process_alias.get(app_raw.lower().strip(), app_raw.strip())
+            
+            if slot == "left":
+                pos, size = "{0, menuOffset}", "{halfWidth, availHeight}"
+            elif slot == "right":
+                pos, size = "{halfWidth, menuOffset}", "{halfWidth, availHeight}"
+            elif slot == "top_left":
+                pos, size = "{0, menuOffset}", "{halfWidth, halfHeight}"
+            elif slot == "top_right":
+                pos, size = "{halfWidth, menuOffset}", "{halfWidth, halfHeight}"
+            elif slot == "bottom_left":
+                pos, size = "{0, menuOffset + halfHeight}", "{halfWidth, halfHeight}"
+            elif slot == "bottom_right":
+                pos, size = "{halfWidth, menuOffset + halfHeight}", "{halfWidth, halfHeight}"
+            else:
+                continue
+
+            script += f'''
+    if exists (process "{proc}") then
+        tell process "{proc}"
+            set frontmost to true
+            if (count of windows) > 0 then
+                set position of window 1 to {pos}
+                set size of window 1 to {size}
+            end if
+        end tell
+    end if
+'''
+        script += "\nend tell"
+        res = cls.run_applescript(script)
+        return {"success": True, "message": "Positionally tiled windows", "result": res}
+
+
+    @classmethod
     def set_volume(cls, level_percent: int) -> dict:
         """Set macOS system master volume (0-100)."""
         valid_level = max(0, min(100, level_percent))
