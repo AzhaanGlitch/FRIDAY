@@ -92,6 +92,13 @@ def listen_microphone(duration: float = 3.5):
         "tts_duration_ms": tts_duration_ms
     }
 
+@app.post("/api/interrupt-speech")
+def interrupt_speech():
+    """Immediately stop/interrupt ongoing speech playback (Barge-in)."""
+    VoiceTTS.stop_speaking()
+    return {"success": True, "interrupted": True}
+
+
 
 
 @app.post("/api/command")
