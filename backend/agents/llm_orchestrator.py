@@ -16,7 +16,7 @@ Language & Tone Rules:
 - Keep spoken replies concise, warm, and human-like (1-2 sentences).
 
 Command Handling Rules:
-1. If the user wants to execute any computer action (open apps, close apps, websites, volume, music, coding mode, screenshot, lock), output JSON:
+1. If the user wants to execute any computer action (open apps, close apps, websites, volume, brightness, music, coding mode, screenshot, lock), output JSON:
    {"action": "<action_name>", "params": {...}, "spoken_reply": "<short reply to speak>"}
    Actions available: open_app, close_app, open_url, set_volume, mute_sound, set_brightness, media_control, lock_screen, take_screenshot, terminate_system, coding_mode.
 
@@ -39,19 +39,10 @@ Command Handling Rules:
     def _fuzzy_direct_match(cls, text_lower: str) -> dict | None:
         """
         Ultra-fast direct keyword & fuzzy regex matching (< 1ms) in both English & Hindi/Hinglish.
+        Ensures CLOSE actions take precedence over OPEN actions.
         """
-        is_hindi = any(w in text_lower for w in ["khol", "kholo", "kholdo", "chalao", "band", "kar", "kardo", "kaise", "kya", "batao", "sun", "sunao", "aawaz", "gaana", "badhao", "ghatao"])
+        is_hindi = any(w in text_lower for w in ["khol", "kholo", "kholdo", "chalao", "band", "kar", "kardo", "kaise", "kya", "batao", "sun", "sunao", "aawaz", "gaana", "badhao", "ghatao", "chamak"])
 
-        # 1. Termination (English & Hindi)
-        if any(w in text_lower for w in ["terminate the system", "terminate system", "shutdown system", "exit system", "system band kardo", "band kar do", "alvida friday"]):
-            reply = "System band kar rahi hoon. Alvida sir." if is_hindi else "Terminating system. Goodbye sir."
-            return {
-                "action": "terminate_system",
-                "params": {},
-                "spoken_reply": reply
-            }
-
-        # 2. Open App (English: "open spotify" / Hindi: "spotify kholo", "spotify chalao", "spotify open kardo")
         app_map = {
             "spotify": "Spotify",
             "calculator": "Calculator",
@@ -83,8 +74,52 @@ Command Handling Rules:
             "notion": "Notion"
         }
 
+        # 1. Termination (English & Hindi)
+        if any(w in text_lower for w in ["terminate the system", "terminate system", "shutdown system", "exit system", "system band kardo", "band kar do", "alvida friday"]):
+            reply = "System band kar rahi hoon. Alvida sir." if is_hindi else "Terminating system. Goodbye sir."
+            return {
+                "action": "terminate_system",
+                "params": {},
+                "spoken_reply": reply
+            }
+
+        # 2. CLOSE App Intent (Checked BEFORE Open to prevent "closing spotify" from triggering open!)
+        is_close_intent = any(w in text_lower for w in ["close", "quit", "exit", "kill", "stop", "band", "hatao", "closing"])
+        if is_close_intent:
+            for app_key, app_val in app_map.items():
+                if app_key in text_lower:
+                    reply = f"{app_val} band kar diya." if is_hindi else f"Closing {app_val}."
+                    return {
+                        "action": "close_app",
+                        "params": {"app_name": app_val},
+                        "spoken_reply": reply
+                    }
+
+        # 3. Brightness Controls (English & Hindi)
+        if "brightness" in text_lower or "chamak" in text_lower or "screen light" in text_lower:
+            numbers = re.findall(r'\d+', text_lower)
+            if numbers:
+                level = int(numbers[0])
+            elif any(w in text_lower for w in ["full", "max", "maximum", "poori", "100"]):
+                level = 100
+            elif any(w in text_lower for w in ["low", "kam", "min", "minimum", "dim"]):
+                level = 30
+            elif any(w in text_lower for w in ["badhao", "increase", "up"]):
+                level = 85
+            elif any(w in text_lower for w in ["ghatao", "decrease", "down"]):
+                level = 40
+            else:
+                level = 100
+
+            reply = f"Brightness {level} percent kar di hai." if is_hindi else f"Setting brightness to {level}%."
+            return {
+                "action": "set_brightness",
+                "params": {"level": level},
+                "spoken_reply": reply
+            }
+
+        # 4. OPEN App Intent (Checked after Close)
         for app_key, app_val in app_map.items():
-            # Matches English: "open spotify", "launch spotify" | Hindi: "spotify khol do", "spotify chalao", "spotify kholo"
             pattern = rf'(?:open|launch|start|run|play|khol|kholo|kholdo|chalao|khol do)?\s*(?:the\s+app\s+)?\b{re.escape(app_key)}\b\s*(?:khol\s*do|kholo|chalao|open\s*kardo)?'
             if re.search(pattern, text_lower):
                 reply = f"{app_val} khol rahi hoon." if is_hindi else f"Opening {app_val}."
@@ -94,7 +129,7 @@ Command Handling Rules:
                     "spoken_reply": reply
                 }
 
-        # 3. Web URL Open (English & Hindi)
+        # 5. Web URL Open (English & Hindi)
         web_domains = {
             "youtube": "youtube.com",
             "google": "google.com",
@@ -127,19 +162,7 @@ Command Handling Rules:
                 "spoken_reply": f"Opening {url}."
             }
 
-        # 4. Close App (English: "close spotify" | Hindi: "spotify band kardo", "spotify hatao")
-        close_match = re.search(r'(?:close|quit|exit|kill|stop|band\s*kardo|band\s*karo|hatao)\s+(?:up\s+)?([a-zA-Z0-9\.\s]+)', text_lower)
-        if close_match or any(w in text_lower for w in ["band kardo", "band karo", "close"]):
-            for app_key, app_val in app_map.items():
-                if app_key in text_lower:
-                    reply = f"{app_val} band kar diya." if is_hindi else f"Closing {app_val}."
-                    return {
-                        "action": "close_app",
-                        "params": {"app_name": app_val},
-                        "spoken_reply": reply
-                    }
-
-        # 5. Volume Controls (English: "set volume to 80" | Hindi: "aawaz 80 kardo", "aawaz kam karo", "aawaz badhao", "mute kardo")
+        # 6. Volume Controls
         if any(w in text_lower for w in ["volume", "sound", "aawaz", "awaaz"]):
             if any(w in text_lower for w in ["mute", "chup", "silent"]):
                 reply = "Aawaz band kar di." if is_hindi else "Muting system audio."
@@ -158,7 +181,7 @@ Command Handling Rules:
             elif "kam" in text_lower or "decrease" in text_lower:
                 return {"action": "set_volume", "params": {"level": 30}, "spoken_reply": "Volume kam kar diya." if is_hindi else "Decreasing volume."}
 
-        # 6. Media Playback (English: "pause music" | Hindi: "gaana roko", "gaana chalao", "next gaana")
+        # 7. Media Playback
         if any(w in text_lower for w in ["pause music", "pause song", "pause", "gaana roko", "roko"]):
             return {"action": "media_control", "params": {"action": "pause"}, "spoken_reply": "Gaana rok diya." if is_hindi else "Paused playback."}
         if any(w in text_lower for w in ["play music", "resume music", "play song", "resume", "gaana chalao", "chalao"]):
@@ -166,15 +189,15 @@ Command Handling Rules:
         if any(w in text_lower for w in ["next song", "next track", "skip song", "agla gaana", "next gaana"]):
             return {"action": "media_control", "params": {"action": "next"}, "spoken_reply": "Agla gaana play kar rahi hoon." if is_hindi else "Skipping to next track."}
 
-        # 7. Screenshot (English: "take screenshot" | Hindi: "screenshot lelo", "screen capture karo")
+        # 8. Screenshot
         if any(w in text_lower for w in ["screenshot", "screen capture", "screenshot lelo"]):
             return {"action": "take_screenshot", "params": {}, "spoken_reply": "Screenshot le liya." if is_hindi else "Screenshot captured."}
 
-        # 8. Lock screen (English: "lock mac" | Hindi: "screen lock kardo")
+        # 9. Lock screen
         if any(w in text_lower for w in ["lock screen", "lock mac", "lock kardo", "screen lock"]):
             return {"action": "lock_screen", "params": {}, "spoken_reply": "Screen lock kar rahi hoon." if is_hindi else "Locking screen."}
 
-        # 9. Coding mode (English: "start coding mode" | Hindi: "coding mode chalu karo")
+        # 10. Coding mode
         if any(w in text_lower for w in ["coding mode", "start coding", "coding shuru"]):
             return {"action": "coding_mode", "params": {}, "spoken_reply": "Coding mode shuru kar diya hai." if is_hindi else "Coding mode initiated."}
 
