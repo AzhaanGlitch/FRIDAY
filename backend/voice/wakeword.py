@@ -3,10 +3,9 @@ import scipy.io.wavfile as wav
 import tempfile
 import time
 import os
-import requests
+import sys
 import numpy as np
 import speech_recognition as sr
-from backend.config.config import settings
 
 class WakeWordDetector:
     """
@@ -44,27 +43,7 @@ class WakeWordDetector:
 
         return False
 
-    @classmethod
-    def _transcribe_groq_whisper(cls, wav_path: str) -> str:
-        """Transcribe wake word candidate with Groq Whisper."""
-        if not settings.GROQ_API_KEY:
-            return ""
-        try:
-            url = "https://api.groq.com/openai/v1/audio/transcriptions"
-            headers = {"Authorization": f"Bearer {settings.GROQ_API_KEY}"}
-            with open(wav_path, "rb") as f:
-                files = {"file": ("chunk.wav", f, "audio/wav")}
-                data = {
-                    "model": "whisper-large-v3-turbo",
-                    "temperature": 0.0,
-                    "prompt": "FRIDAY, hey Friday, hello Friday"
-                }
-                res = requests.post(url, headers=headers, files=files, data=data, timeout=2.5)
-            if res.status_code == 200:
-                return res.json().get("text", "").strip()
-        except Exception:
-            pass
-        return ""
+
 
     @classmethod
     def _record_chunk(cls, duration: float = 1.3) -> tuple[str, bool]:
@@ -89,6 +68,12 @@ class WakeWordDetector:
     @classmethod
     def detect_wakeword(cls, timeout_seconds: int = 15) -> bool:
         """Listen for wake word 'FRIDAY' with high accuracy and low false-positive rate."""
+        # Ensure any previous sounddevice session is fully stopped (prevents Windows mic lock)
+        try:
+            sd.stop()
+        except Exception:
+            pass
+
         recognizer = sr.Recognizer()
         recognizer.energy_threshold = 180
         recognizer.dynamic_energy_threshold = False
@@ -109,22 +94,24 @@ class WakeWordDetector:
                     google_text = recognizer.recognize_google(audio).lower()
                     print(f"[WakeWord Heard (Fast)]: '{google_text}'")
                     if cls._is_wakeword_matched(google_text):
-                        print("[WakeWord] Woken up by 'FRIDAY'!")
+                        print(f"[WakeWord] Woken up by '{google_text}'!")
                         if wav_path and os.path.exists(wav_path):
-                            os.unlink(wav_path)
+                            try:
+                                os.unlink(wav_path)
+                            except OSError:
+                                pass
+                        # Release audio device before returning (critical for Windows mic handoff)
+                        try:
+                            sd.stop()
+                        except Exception:
+                            pass
+                        if sys.platform == "win32":
+                            time.sleep(0.3)
                         return True
             except Exception:
                 pass
 
-            # 2. Groq Whisper Check
-            whisper_text = cls._transcribe_groq_whisper(wav_path).lower()
-            if whisper_text:
-                print(f"[WakeWord Heard (Whisper)]: '{whisper_text}'")
-                if cls._is_wakeword_matched(whisper_text):
-                    print("[WakeWord] Woken up by 'FRIDAY'!")
-                    if wav_path and os.path.exists(wav_path):
-                        os.unlink(wav_path)
-                    return True
+
 
             if wav_path and os.path.exists(wav_path):
                 try:

@@ -4,10 +4,9 @@ import speech_recognition as sr
 import tempfile
 import threading
 import os
-import requests
+import sys
 import time
 import numpy as np
-from backend.config.config import settings
 from backend.voice.tts import VoiceTTS
 
 # Global mutex — only one mic recording at a time
@@ -15,20 +14,20 @@ _mic_lock = threading.Lock()
 
 class VoiceSTT:
     """
-    State-of-the-Art Speech Recognition Engine.
-    Uses Google Cloud Speech API as ultra-fast, robust Primary STT (zero hallucination, perfect Hindi/English words)
-    backed by Groq Whisper Large-v3 fallback.
+    Speech Recognition Engine.
+    Uses Google Speech API as ultra-fast, robust Primary STT (zero hallucination, perfect Hindi/English words).
+    Only Google STT hi-IN / en-IN is used — no Whisper fallback.
     """
 
     SAMPLE_RATE = 16000
 
     def __init__(self):
         self.recognizer = sr.Recognizer()
-        self.recognizer.energy_threshold = 200
-        self.recognizer.dynamic_energy_threshold = False
-        self.recognizer.pause_threshold = 2.0  # Allow 2.0 seconds of natural speech pause before finishing!
+        self.recognizer.energy_threshold = 150
+        self.recognizer.dynamic_energy_threshold = True
+        self.recognizer.pause_threshold = 0.8  # 0.8s pause to finish phrase quickly
         self.recognizer.phrase_threshold = 0.3
-        self.recognizer.non_speaking_duration = 1.0
+        self.recognizer.non_speaking_duration = 0.5
 
     def _transcribe_google(self, wav_path: str) -> str:
         """Transcribe using Google Speech Recognition (High-accuracy bilingual Hindi+English, zero hallucinations)."""
@@ -58,75 +57,50 @@ class VoiceSTT:
             print(f"[STT Google Error]: {e}")
         return ""
 
-    def _transcribe_groq_whisper(self, wav_path: str) -> str:
-        """Transcribe audio using Groq Whisper Large v3 Turbo as secondary fallback."""
-        if not settings.GROQ_API_KEY:
-            return ""
 
-        try:
-            url = "https://api.groq.com/openai/v1/audio/transcriptions"
-            headers = {"Authorization": f"Bearer {settings.GROQ_API_KEY}"}
-            
-            with open(wav_path, "rb") as f:
-                files = {"file": (os.path.basename(wav_path), f, "audio/wav")}
-                data = {
-                    "model": "whisper-large-v3-turbo",
-                    "temperature": 0.0,
-                }
-                res = requests.post(url, headers=headers, files=files, data=data, timeout=8)
 
-            if res.status_code == 200:
-                text = res.json().get("text", "").strip()
-                if text:
-                    lower_t = text.lower()
-                    # Filter phantom hallucinations
-                    if any(phrase in lower_t for phrase in ["subtitles by", "amara.org", "thank you for watching", "bye"]):
-                        return ""
-                    print(f"[STT Groq Whisper]: '{text}'")
-                    return text
-        except Exception as e:
-            print(f"[STT Groq Error]: {e}")
-
-        return ""
-
-    def record_and_transcribe(self, max_duration_seconds: float = 15.0, duration_seconds: float = None, **kwargs) -> dict:
+    def record_and_transcribe(self, max_duration_seconds: float = 10.0, **kwargs) -> dict:
         """
-        Record user speech cleanly using SpeechRecognition microphone stream:
-        - Listens until user genuinely finishes speaking with a comfortable 2.0s pause.
-        - Captures full, long sentences without any premature cutoffs.
+        Record user speech cleanly using sounddevice (100% compatible with Windows sounddevice mic handling).
         """
         if not _mic_lock.acquire(blocking=False):
             return {"success": False, "error": "Another recording is already in progress"}
 
         wav_path = ""
         try:
-            # Record using recognizer with 2.0s pause threshold
-            with sr.Microphone(sample_rate=self.SAMPLE_RATE) as source:
-                VoiceTTS.stop_speaking()
-                # Record phrase with max phrase time limit of 15 seconds and 4.0s timeout to start
-                try:
-                    audio = self.recognizer.listen(source, timeout=3.5, phrase_time_limit=15.0)
-                except sr.WaitTimeoutError:
-                    return {"success": False, "error": "Silence"}
+            print("[STT] Listening for user command...")
+            VoiceTTS.stop_speaking()
+
+            # Record 4.5 second audio buffer using sounddevice (same device stack as WakeWord)
+            duration = 4.5
+            num_samples = int(duration * self.SAMPLE_RATE)
+            audio_data = sd.rec(num_samples, samplerate=self.SAMPLE_RATE, channels=1, dtype='int16')
+            sd.wait()
+
+            # Energy check to see if user actually spoke
+            energy = np.sqrt(np.mean(audio_data.astype(np.float32) ** 2))
+            if energy < 120:
+                print("[STT] Silence (ambient noise only).")
+                return {"success": False, "error": "Silence"}
 
             # Save temporary WAV
             tmp = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
-            tmp.write(audio.get_wav_data())
+            wav.write(tmp.name, self.SAMPLE_RATE, audio_data)
             tmp.close()
             wav_path = tmp.name
 
-            # 1. Primary: Google Multi-Lingual STT (hi-IN / en-IN)
+            # Google STT (hi-IN / en-IN)
             text = self._transcribe_google(wav_path)
 
-            # 2. Fallback: Groq Whisper Large-v3
-            if not text:
-                text = self._transcribe_groq_whisper(wav_path)
-
             if text and len(text.strip()) > 1:
+                print(f"[STT Recognized]: '{text}'")
                 return {"success": True, "text": text}
+            
+            print("[STT] Sound detected but no clear speech transcribed.")
             return {"success": False, "error": "No speech recognized"}
 
         except Exception as e:
+            print(f"[STT Error]: {e}")
             return {"success": False, "error": str(e)}
         finally:
             _mic_lock.release()
