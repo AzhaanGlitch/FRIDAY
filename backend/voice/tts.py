@@ -5,6 +5,7 @@ import threading
 import asyncio
 import tempfile
 import re
+import time
 
 # Active playback subprocess reference for instant barge-in kill
 _active_playback_proc = None
@@ -14,12 +15,13 @@ _is_speaking_event = threading.Event()
 class VoiceTTS:
     """
     Ultra-Realistic Microsoft Neural Voice Engine with Barge-In (Instant Interruption) Support.
+    Cross-platform support for macOS, Windows, and Linux.
     - Multilingual & Indian English: en-IN-NeerjaExpressiveNeural / en-US-AvaMultilingualNeural
     - Hindi Voice: hi-IN-SwaraNeural (Warm, expressive Indian human female)
     """
 
-    ENGLISH_VOICE = "en-IN-NeerjaExpressiveNeural"  # Highly natural expressive Indian English assistant voice
-    HINDI_VOICE = "hi-IN-SwaraNeural"              # Real human Hindi voice
+    ENGLISH_VOICE = "en-IN-NeerjaExpressiveNeural"
+    HINDI_VOICE = "hi-IN-SwaraNeural"
 
     @classmethod
     def is_speaking(cls) -> bool:
@@ -41,20 +43,26 @@ class VoiceTTS:
                     pass
                 _active_playback_proc = None
             
-            # Kill any system afplay processes if running
+            # Kill platform-specific players
             if sys.platform == "darwin":
                 try:
                     subprocess.run(["pkill", "-9", "-f", "afplay"], capture_output=True)
+                except Exception:
+                    pass
+            elif sys.platform == "win32":
+                try:
+                    # Stop pygame playback if running
+                    import pygame
+                    if pygame.mixer.get_init():
+                        pygame.mixer.music.stop()
                 except Exception:
                     pass
 
     @classmethod
     def _is_hindi(cls, text: str) -> bool:
         """Detect if text contains Hindi (Devanagari) characters or common Romanized Hindi words."""
-        # Devanagari Unicode range
         if re.search(r'[\u0900-\u097F]', text):
             return True
-        # Common Romanized Hindi keywords
         hindi_keywords = [
             "haan", "theek", "shukriya", "kya", "kaise", "batao", "karein", "hai", 
             "hain", "kardo", "kholo", "chalao", "hoon", "main", "aap", "tum", 
@@ -96,7 +104,7 @@ class VoiceTTS:
 
     @classmethod
     def play_synthesized_file(cls, mp3_path: str, on_start=None, on_end=None):
-        """Play already synthesized MP3 file with zero startup delay."""
+        """Play synthesized MP3 file cleanly on macOS and Windows."""
         if not mp3_path or not os.path.exists(mp3_path):
             return
 
@@ -108,6 +116,23 @@ class VoiceTTS:
                 _is_speaking_event.set()
                 if sys.platform == "darwin":
                     _active_playback_proc = subprocess.Popen(["afplay", mp3_path])
+                elif sys.platform == "win32":
+                    # Windows: Use pygame mixer or PowerShell Media Player fallback
+                    try:
+                        import pygame
+                        if not pygame.mixer.get_init():
+                            pygame.mixer.init()
+                        pygame.mixer.music.load(mp3_path)
+                        pygame.mixer.music.play()
+                        if on_start:
+                            on_start()
+                        while pygame.mixer.music.get_busy() and _is_speaking_event.is_set():
+                            time.sleep(0.05)
+                        return
+                    except Exception:
+                        # Fallback to PowerShell Windows Media Player
+                        ps_cmd = f"(New-Object Media.SoundPlayer '{mp3_path}').PlaySync();"
+                        _active_playback_proc = subprocess.Popen(["powershell", "-c", ps_cmd])
                 else:
                     _active_playback_proc = subprocess.Popen(["ffplay", "-nodisp", "-autoexit", mp3_path])
 
@@ -117,7 +142,8 @@ class VoiceTTS:
                 except Exception:
                     pass
 
-            _active_playback_proc.wait()
+            if _active_playback_proc:
+                _active_playback_proc.wait()
         except Exception as e:
             print(f"[VoiceTTS Playback Error]: {e}")
         finally:
@@ -137,9 +163,7 @@ class VoiceTTS:
 
     @classmethod
     def speak(cls, text: str) -> dict:
-        """
-        Synthesize and play in one step.
-        """
+        """Synthesize and play in one step."""
         mp3 = cls.synthesize_to_file(text)
         if not mp3:
             return {"success": False, "error": "Failed to synthesize speech"}
