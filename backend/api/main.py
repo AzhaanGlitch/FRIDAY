@@ -49,6 +49,12 @@ def health_check():
 def wait_for_wakeword(timeout: int = 15):
     """Block until wake word 'FRIDAY' is heard with high sensitivity."""
     woken = WakeWordDetector.detect_wakeword(timeout_seconds=timeout)
+    if woken:
+        # Play acknowledgement SYNCHRONOUSLY so mic is guaranteed free when we return
+        VoiceTTS.speak("Yes sir?")
+        # Brief settle time for audio hardware to fully release
+        import time
+        time.sleep(0.2)
     return {"success": woken, "woken": woken}
 
 @app.get("/api/history")
