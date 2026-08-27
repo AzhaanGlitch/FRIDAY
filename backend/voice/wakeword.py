@@ -74,10 +74,11 @@ class WakeWordDetector:
             audio_data = sd.rec(num_samples, samplerate=cls.SAMPLE_RATE, channels=1, dtype='int16')
             sd.wait()
 
-            # Balanced threshold: 140 RMS (rejects faint room sounds, breathes, echoes)
+            # Balanced threshold: 70 RMS (works reliably on both Mac and Windows laptop built-in mics)
             energy = np.sqrt(np.mean(audio_data.astype(np.float32) ** 2))
-            if energy < 140:
+            if energy < 70:
                 return ("", False)
+
 
             tmp = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
             wav.write(tmp.name, cls.SAMPLE_RATE, audio_data)
