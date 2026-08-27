@@ -44,7 +44,9 @@ export const App: React.FC = () => {
       if (!isRunningRef.current) { loopActiveRef.current = false; return; }
 
       if (wakeRes.success && wakeRes.woken) {
-        // Step 2: Wake Word Confirmed -> Enter Infinite Active Listening Loop
+        // Step 2: Wake Word Confirmed -> Enter Active Listening Loop
+        // NOTE: TTS "Yes sir?" is now played synchronously in the backend,
+        // so by the time we get here, speech is already done.
         setLiveTranscript('Heard: "FRIDAY" → System ACTIVE');
         await startContinuousActiveListeningLoop();
       } else {
@@ -79,20 +81,24 @@ export const App: React.FC = () => {
   };
 
   /**
-   * Infinite Active Listening Loop:
+   * Active Listening Loop:
    * Real-time zero-delay speech animations + listening cycle.
+   * Returns to wake word standby after sustained silence (~6 min).
    */
   const startContinuousActiveListeningLoop = async () => {
+    let consecutiveSilences = 0;
+    const MAX_SILENCES_BEFORE_STANDBY = 30; // ~30 * 12s max recording = ~6 min of pure silence
+
     while (isRunningRef.current) {
       setVoiceState('listening');
 
       try {
         const data = await fetch('http://localhost:8000/api/listen-mic', { method: 'POST' }).then(r => r.json());
 
-
         if (!isRunningRef.current) break;
 
         if (data.success && data.response?.text_response) {
+          consecutiveSilences = 0; // Reset silence counter on successful recognition
           const text = data.response.text_response;
           const action = data.response.action_executed;
           const transcribed = data.transcribed_command || '';
@@ -117,18 +123,33 @@ export const App: React.FC = () => {
 
           // Wait exactly while audio is playing, then smoothly transition back to listening
           await waitForSpeechToFinish();
+          await new Promise(r => setTimeout(r, 350));
 
           // Immediately loop back to listening for next command
           continue;
         } else {
-          // Silence or background noise window
+          consecutiveSilences++;
+          console.log(`[FRIDAY] Silence #${consecutiveSilences}/${MAX_SILENCES_BEFORE_STANDBY}`);
+
+          // After sustained silence, return to wake word standby
+          if (consecutiveSilences >= MAX_SILENCES_BEFORE_STANDBY) {
+            console.log('[FRIDAY] Sustained silence — returning to wake word standby');
+            setLiveTranscript('Idle timeout — returning to standby. Say "FRIDAY" to activate.');
+            break; // Exit active listening, will return to runVoiceLoop -> wakeword mode
+          }
+
           setLiveTranscript('Listening... (Say any command or "Terminate the system")');
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise(resolve => setTimeout(resolve, 300));
         }
       } catch (err) {
         console.error('Mic Listening Error:', err);
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
+    }
+
+    // Fell out of active listening -> restart main voice loop (wake word detection)
+    if (isRunningRef.current) {
+      setTimeout(() => runVoiceLoop(), 100);
     }
   };
 
