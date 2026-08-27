@@ -12,12 +12,13 @@ class SystemAutomation:
         is_win = sys.platform == "win32"
 
         if intent == "open_app":
-            app_name = params.get("app_name", "")
+            app_name = params.get("app_name") or params.get("app") or params.get("name") or params.get("application") or ""
             return MacAutomation.open_application(app_name) if is_mac else WinAutomation.open_application(app_name) if is_win else {"success": False, "error": f"Unsupported platform: {sys.platform}"}
 
         elif intent == "close_app":
-            app_name = params.get("app_name", "")
+            app_name = params.get("app_name") or params.get("app") or params.get("name") or params.get("application") or ""
             return MacAutomation.close_application(app_name) if is_mac else WinAutomation.close_application(app_name) if is_win else {"success": False, "error": f"Unsupported platform: {sys.platform}"}
+
 
         elif intent == "set_volume":
             level = params.get("level", 50)
