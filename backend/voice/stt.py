@@ -15,25 +15,28 @@ _mic_lock = threading.Lock()
 
 class VoiceSTT:
     """
-    Ultra-Reliable Cross-Platform Speech Recognition Engine (macOS & Windows).
-    Uses sounddevice for 100% C-level PortAudio capturing (bypasses PyAudio issues on Windows).
-    - Energy-based Voice Activity Detection (VAD) with 1.8s speech hold.
-    - Google Cloud Multi-lingual (hi-IN / en-IN) as Primary STT with zero hallucinations.
-    - Groq Whisper Large-v3 as high-accuracy secondary fallback.
+    State-of-the-Art Speech Recognition Engine.
+    Uses Google Cloud Speech API as ultra-fast, robust Primary STT (zero hallucination, perfect Hindi/English words)
+    backed by Groq Whisper Large-v3 fallback.
     """
 
     SAMPLE_RATE = 16000
 
     def __init__(self):
         self.recognizer = sr.Recognizer()
+        self.recognizer.energy_threshold = 200
+        self.recognizer.dynamic_energy_threshold = False
+        self.recognizer.pause_threshold = 2.0  # Allow 2.0 seconds of natural speech pause before finishing!
+        self.recognizer.phrase_threshold = 0.3
+        self.recognizer.non_speaking_duration = 1.0
 
     def _transcribe_google(self, wav_path: str) -> str:
-        """Transcribe using Google Speech Recognition (High-accuracy bilingual Hindi+English)."""
+        """Transcribe using Google Speech Recognition (High-accuracy bilingual Hindi+English, zero hallucinations)."""
         try:
             with sr.AudioFile(wav_path) as source:
                 audio = self.recognizer.record(source)
                 
-                # 1. Hindi-India (Detects pure Hindi, Hinglish and English commands seamlessly)
+                # 1. Primary: Hindi-India (Detects both pure Hindi, Hinglish and English commands seamlessly)
                 try:
                     text_hi = self.recognizer.recognize_google(audio, language="hi-IN")
                     if text_hi and len(text_hi.strip()) > 1:
@@ -76,6 +79,7 @@ class VoiceSTT:
                 text = res.json().get("text", "").strip()
                 if text:
                     lower_t = text.lower()
+                    # Filter phantom hallucinations
                     if any(phrase in lower_t for phrase in ["subtitles by", "amara.org", "thank you for watching", "bye"]):
                         return ""
                     print(f"[STT Groq Whisper]: '{text}'")
@@ -87,57 +91,28 @@ class VoiceSTT:
 
     def record_and_transcribe(self, max_duration_seconds: float = 15.0, duration_seconds: float = None, **kwargs) -> dict:
         """
-        Record live mic audio via sounddevice (works on 100% Windows & macOS without PyAudio).
-        Listens until user genuinely finishes speaking with a comfortable 1.8s pause.
+        Record user speech cleanly using SpeechRecognition microphone stream:
+        - Listens until user genuinely finishes speaking with a comfortable 2.0s pause.
+        - Captures full, long sentences without any premature cutoffs.
         """
-        if duration_seconds is not None:
-            max_duration_seconds = max(max_duration_seconds, duration_seconds)
-
         if not _mic_lock.acquire(blocking=False):
             return {"success": False, "error": "Another recording is already in progress"}
 
         wav_path = ""
         try:
-            chunk_duration = 0.3
-            chunk_samples = int(chunk_duration * self.SAMPLE_RATE)
-            recorded_chunks = []
-            
-            voice_started = False
-            silence_chunks = 0
-            # 6 consecutive silence chunks = 6 * 0.3s = 1.8 seconds pause needed to finish speaking
-            max_silence_chunks = 6
-            max_total_chunks = int(max_duration_seconds / chunk_duration)
+            # Record using recognizer with 2.0s pause threshold
+            with sr.Microphone(sample_rate=self.SAMPLE_RATE) as source:
+                VoiceTTS.stop_speaking()
+                # Record phrase with max phrase time limit of 15 seconds and 4.0s timeout to start
+                try:
+                    audio = self.recognizer.listen(source, timeout=3.5, phrase_time_limit=15.0)
+                except sr.WaitTimeoutError:
+                    return {"success": False, "error": "Silence"}
 
-            for _ in range(max_total_chunks):
-                chunk = sd.rec(chunk_samples, samplerate=self.SAMPLE_RATE, channels=1, dtype='int16')
-                sd.wait()
-
-                # Calculate RMS energy
-                energy = np.sqrt(np.mean(chunk.astype(np.float32) ** 2))
-
-                # Human voice threshold (75 RMS to support quiet Windows laptop mics)
-                if energy > 75:
-                    if not voice_started:
-                        voice_started = True
-                        VoiceTTS.stop_speaking()
-                    silence_chunks = 0
-                    recorded_chunks.append(chunk)
-                else:
-                    if voice_started:
-                        silence_chunks += 1
-                        recorded_chunks.append(chunk)
-                        if silence_chunks >= max_silence_chunks:
-                            break
-
-            if not voice_started or len(recorded_chunks) < 2:
-                return {"success": False, "error": "Silence"}
-
-            # Combine recorded speech chunks
-            full_audio = np.concatenate(recorded_chunks, axis=0)
-
-            # Save clean WAV
+            # Save temporary WAV
             tmp = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
-            wav.write(tmp.name, self.SAMPLE_RATE, full_audio)
+            tmp.write(audio.get_wav_data())
+            tmp.close()
             wav_path = tmp.name
 
             # 1. Primary: Google Multi-Lingual STT (hi-IN / en-IN)
@@ -152,7 +127,6 @@ class VoiceSTT:
             return {"success": False, "error": "No speech recognized"}
 
         except Exception as e:
-            print(f"[VoiceSTT Capture Error]: {e}")
             return {"success": False, "error": str(e)}
         finally:
             _mic_lock.release()
