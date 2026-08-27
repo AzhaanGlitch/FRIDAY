@@ -22,10 +22,9 @@ call .\venv\Scripts\pip.exe install -r requirements.txt
 :: 2. Setup Frontend
 echo [2/4] Setting up Desktop Frontend...
 cd "%PROJECT_ROOT%desktop"
-if not exist "node_modules" (
-    echo Installing node dependencies...
-    call npm install
-)
+echo Syncing frontend dependencies...
+call npm install
+
 
 :: 3. Launch Backend
 echo [3/4] Starting FRIDAY Backend Server...
