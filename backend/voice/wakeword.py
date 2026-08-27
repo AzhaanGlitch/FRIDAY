@@ -16,19 +16,17 @@ class WakeWordDetector:
     """
 
     SAMPLE_RATE = 16000
-    CHUNK_DURATION = 1.6
+    CHUNK_DURATION = 1.3
 
-    # Clean, accurate wake word patterns (including low-volume/soft STT variations)
+    # Clean, accurate wake word patterns
     WAKE_PATTERNS = [
         "friday", "hey friday", "hi friday", "hello friday", 
-        "ok friday", "okay friday", "fraiday", "fryday",
-        "freddy", "frida", "free day", "fly day", "phriday",
-        "fri day", "ready", "try day", "free"
+        "ok friday", "okay friday", "fraiday", "fryday"
     ]
 
     @classmethod
     def _is_wakeword_matched(cls, text: str) -> bool:
-        """Accurate matching to eliminate false alarms while supporting soft/low voices."""
+        """Accurate matching to eliminate false alarms."""
         text_clean = text.lower().strip()
         if not text_clean:
             return False
@@ -41,7 +39,7 @@ class WakeWordDetector:
         # Word boundary match
         words = text_clean.split()
         for w in words:
-            if w in ["friday", "fryday", "fraiday", "freddy", "frida"] or w.startswith("frid") or w.startswith("fryd"):
+            if w in ["friday", "fryday", "fraiday"] or w.startswith("frid"):
                 return True
 
         return False
@@ -69,16 +67,16 @@ class WakeWordDetector:
         return ""
 
     @classmethod
-    def _record_chunk(cls, duration: float = 1.6) -> tuple[str, bool]:
-        """Record audio chunk with high sensitivity to capture soft/low voice speaking."""
+    def _record_chunk(cls, duration: float = 1.3) -> tuple[str, bool]:
+        """Record audio chunk with balanced speech energy gate."""
         try:
             num_samples = int(duration * cls.SAMPLE_RATE)
             audio_data = sd.rec(num_samples, samplerate=cls.SAMPLE_RATE, channels=1, dtype='int16')
             sd.wait()
 
-            # High sensitivity threshold: 25 RMS (captures low/soft voices while ignoring total silence)
+            # Balanced threshold: 140 RMS (rejects faint room sounds, breathes, echoes)
             energy = np.sqrt(np.mean(audio_data.astype(np.float32) ** 2))
-            if energy < 25:
+            if energy < 140:
                 return ("", False)
 
             tmp = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
@@ -90,14 +88,12 @@ class WakeWordDetector:
 
     @classmethod
     def detect_wakeword(cls, timeout_seconds: int = 15) -> bool:
-        """Listen for wake word 'FRIDAY' with high sensitivity for quiet/soft speech."""
+        """Listen for wake word 'FRIDAY' with high accuracy and low false-positive rate."""
         recognizer = sr.Recognizer()
-        recognizer.energy_threshold = 45
-        recognizer.dynamic_energy_threshold = True
-        recognizer.dynamic_energy_adjustment_damping = 0.15
-        recognizer.dynamic_energy_ratio = 1.2
+        recognizer.energy_threshold = 180
+        recognizer.dynamic_energy_threshold = False
 
-        print("[WakeWord] Listening for 'FRIDAY' (High Sensitivity)...")
+        print("[WakeWord] Listening for 'FRIDAY'...")
         start_time = time.time()
 
         while time.time() - start_time < timeout_seconds:

@@ -23,7 +23,7 @@ call .\venv\Scripts\pip.exe install -r requirements.txt
 echo [2/4] Setting up Desktop Frontend...
 cd "%PROJECT_ROOT%desktop"
 echo Syncing frontend dependencies...
-call npm install --legacy-peer-deps
+call npm install
 
 
 :: 3. Launch Backend

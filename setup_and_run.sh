@@ -25,7 +25,7 @@ echo "[2/4] Setting up Desktop Frontend..."
 cd "$PROJECT_ROOT/desktop"
 if [ ! -d "node_modules" ]; then
     echo "Installing node dependencies..."
-    npm install --legacy-peer-deps
+    npm install
 fi
 
 # 3. Launch Backend in background
