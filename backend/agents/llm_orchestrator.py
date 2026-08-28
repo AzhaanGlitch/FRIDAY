@@ -598,6 +598,41 @@ RULES:
             else:
                 action_res = SystemAutomation.execute_intent(action, params)
 
+            # Special case for search_file: Speak the exact location and reveal file in Finder/Explorer
+            if action == "search_file" and action_res and isinstance(action_res, dict):
+                files = action_res.get("files", [])
+                if files:
+                    top_f = files[0]
+                    top_name = top_f.get("name", "file")
+                    top_dir = os.path.basename(top_f.get("directory", "folder"))
+                    spoken_reply = f"'{top_name}' mil gayi hai {top_dir} me, screen par open kar di hai." if is_hindi else f"Found '{top_name}' in {top_dir}, revealing in file manager."
+                    # Auto reveal file in macOS Finder or Windows Explorer
+                    try:
+                        if sys.platform == "darwin":
+                            import subprocess
+                            subprocess.run(["open", "-R", top_f["path"]], timeout=2)
+                        elif sys.platform == "win32":
+                            import subprocess
+                            subprocess.run(["explorer", f"/select,{top_f['path']}"], timeout=2)
+                    except Exception:
+                        pass
+                else:
+                    q = params.get("filename", "")
+                    spoken_reply = f"'{q}' file nahi mili." if is_hindi else f"Could not find any file named '{q}'."
+
+            # Special case for recent_downloads
+            if action == "recent_downloads" and action_res and isinstance(action_res, dict):
+                rfiles = action_res.get("recent_files", [])
+                if rfiles:
+                    latest_name = rfiles[0].get("name", "")
+                    spoken_reply = f"Downloads me latest file '{latest_name}' hai." if is_hindi else f"Latest file in Downloads is '{latest_name}'."
+                    try:
+                        if sys.platform == "darwin":
+                            import subprocess
+                            subprocess.run(["open", rfiles[0]["path"]], timeout=2)
+                    except Exception:
+                        pass
+
             MemoryDatabase.save_message("user", user_text)
             if spoken_reply:
                 MemoryDatabase.save_message("friday", spoken_reply, action=action)
@@ -608,6 +643,7 @@ RULES:
                 "parsed_params": params,
                 "result": action_res
             }
+
 
         # Step 3: Groq LLM Intelligent Processing (With speech auto-correction & direct answers)
         llm_response = cls._call_groq_with_fallbacks(user_text)
@@ -634,6 +670,40 @@ RULES:
                 else:
                     action_res = SystemAutomation.execute_intent(action, params)
 
+                # Special case for search_file from LLM
+                if action == "search_file" and action_res and isinstance(action_res, dict):
+                    files = action_res.get("files", [])
+                    if files:
+                        top_f = files[0]
+                        top_name = top_f.get("name", "file")
+                        top_dir = os.path.basename(top_f.get("directory", "folder"))
+                        spoken = f"'{top_name}' mil gayi hai {top_dir} me, screen par open kar di hai." if is_hindi else f"Found '{top_name}' in {top_dir}, revealing in file manager."
+                        try:
+                            if sys.platform == "darwin":
+                                import subprocess
+                                subprocess.run(["open", "-R", top_f["path"]], timeout=2)
+                            elif sys.platform == "win32":
+                                import subprocess
+                                subprocess.run(["explorer", f"/select,{top_f['path']}"], timeout=2)
+                        except Exception:
+                            pass
+                    else:
+                        q = params.get("filename", "")
+                        spoken = f"'{q}' file nahi mili." if is_hindi else f"Could not find any file named '{q}'."
+
+                # Special case for recent_downloads from LLM
+                if action == "recent_downloads" and action_res and isinstance(action_res, dict):
+                    rfiles = action_res.get("recent_files", [])
+                    if rfiles:
+                        latest_name = rfiles[0].get("name", "")
+                        spoken = f"Downloads me latest file '{latest_name}' hai." if is_hindi else f"Latest file in Downloads is '{latest_name}'."
+                        try:
+                            if sys.platform == "darwin":
+                                import subprocess
+                                subprocess.run(["open", rfiles[0]["path"]], timeout=2)
+                        except Exception:
+                            pass
+
                 MemoryDatabase.save_message("user", user_text)
                 if spoken:
                     MemoryDatabase.save_message("friday", spoken, action=action)
@@ -643,6 +713,7 @@ RULES:
                     "parsed_params": params,
                     "result": action_res
                 }
+
             except Exception:
                 pass
 
