@@ -1,3 +1,4 @@
+import os
 import json
 import re
 import sys
@@ -5,6 +6,7 @@ import requests
 from backend.config.config import settings
 from backend.automation.system_automation import SystemAutomation
 from backend.memory.database import MemoryDatabase
+
 
 
 class LLMOrchestrator:
@@ -54,7 +56,30 @@ RULES:
         Ultra-fast direct keyword & fuzzy regex matching (< 1ms) in both English & Hindi/Hinglish.
         Ensures CLOSE & TILE actions take precedence over plain OPEN actions.
         """
-        is_hindi = any(w in text_lower for w in ["khol", "kholo", "kholdo", "chalao", "band", "kar", "kardo", "kaise", "kya", "batao", "sun", "sunao", "aawaz", "gaana", "badhao", "ghatao", "chamak", "jodo", "sath"])
+        # Normalize Devanagari words & common phonetic Hindi transcripts to standard tokens
+        t = text_lower
+
+        
+        # Devanagari verbs and core terms
+        devanagari_replacements = {
+            "ओपन": "open", "खोलो": "open", "खोल दो": "open", "खोल": "open", "चालू करो": "open", "चालू": "open",
+            "क्लोज": "close", "बंद करो": "close", "बंद": "close", "हटाओ": "close", "क्विट": "close",
+            "प्ले": "play", "बजाओ": "play", "चलाओ": "play", "गाना": "play", "पॉज": "pause", "रोको": "pause",
+            "ढूंढो": "search_file", "सर्च": "search", "खोजो": "search", "ढूंढ": "search_file",
+            "डॉट": ".", "पीडीएफ": "pdf", "डॉक": "docx", "टेक्स्ट": "txt",
+            "फ्राइडे": "friday", "फ्राईडे": "friday", "फ़्राइडे": "friday",
+            "स्पॉटिफाई": "spotify", "स्पोटिफाई": "spotify", "क्रोम": "chrome", "गूगल क्रोम": "chrome",
+            "यूट्यूब": "youtube", "गूगल": "google", "टर्मिनल": "terminal", "सफारी": "safari", "कैलकुलेटर": "calculator"
+        }
+        for k, v in devanagari_replacements.items():
+            t = t.replace(k, v)
+
+        # Clean spaces around dots
+        t = re.sub(r'\s*\.\s*', '.', t)
+        text_lower = t.strip()
+
+        is_hindi = any(w in text_lower for w in ["khol", "kholo", "kholdo", "chalao", "band", "kar", "kardo", "kaise", "kya", "batao", "sun", "sunao", "aawaz", "gaana", "badhao", "ghatao", "chamak", "jodo", "sath", "bajao", "dhundo", "roko", "khul"])
+
 
         app_map = {
             "spotify": "Spotify",
@@ -249,9 +274,15 @@ RULES:
                 "spoken_reply": "Downloads folder ko categories me organize kar diya hai." if is_hindi else "Organized files in Downloads into categories."
             }
 
-        if any(text_lower.startswith(p) for p in ["search file", "find file", "file dhundo", "file search"]):
-            fname = re.sub(r'^(search file|find file|file dhundo|file search)\s*', '', text_lower).strip()
+        # 5. File Search & File Management
+        if "search_file" in text_lower or any(w in text_lower for w in ["search file", "find file", "file dhundo", "file search", "dhundo"]):
+            fname = text_lower
+            for w in ["search_file", "search file", "find file", "file dhundo", "file search", "dhundo", "search", "karo", "kardo", "friday", "please"]:
+                fname = re.sub(rf'\b{re.escape(w)}\b', '', fname)
+            fname = fname.strip(" .")
             if fname:
+                if not "." in fname and any(ext in text_lower for ext in ["pdf", "txt", "docx"]):
+                    fname += ".pdf"
                 return {
                     "action": "search_file",
                     "params": {"filename": fname},
@@ -265,18 +296,21 @@ RULES:
                 "spoken_reply": "Recent downloads list kar rahi hoon." if is_hindi else "Listing recent downloads."
             }
 
-
-
         # 6. Deep App Playback & Search (Spotify, YouTube, Google)
-        if any(text_lower.startswith(p) for p in ["play ", "spotify play ", "spotify par bajao ", "gaana bajao "]):
-            song_name = re.sub(r'^(play|spotify play|spotify par bajao|gaana bajao)\s+', '', text_lower).strip()
-            song_name = re.sub(r'\b(on spotify|spotify par)\b', '', song_name).strip()
-            if song_name and song_name not in ["music", "song", "video"]:
+        # Check explicit song playback (e.g. "play Despacito", "Arijit Singh play", "Arijit Singh bajao", "play Arijit Singh")
+        if any(w in text_lower for w in ["play", "bajao", "spotify play", "spotify par bajao", "gaana"]):
+            song_name = text_lower
+            for w in ["spotify play", "spotify par bajao", "gaana bajao", "play", "bajao", "chalao", "on spotify", "spotify par", "spotify", "friday", "please"]:
+                song_name = re.sub(rf'\b{re.escape(w)}\b', '', song_name)
+            song_name = song_name.strip()
+            if song_name and song_name not in ["music", "song", "video", ""]:
                 return {
                     "action": "spotify_play",
                     "params": {"query": song_name},
                     "spoken_reply": f"Spotify par '{song_name}' play kar rahi hoon." if is_hindi else f"Playing '{song_name}' on Spotify."
                 }
+
+
 
         if "search on youtube" in text_lower or "youtube par search" in text_lower or text_lower.startswith("youtube search "):
             query = re.sub(r'.*(search on youtube|youtube par search|youtube search)\s*', '', text_lower).strip()
@@ -320,22 +354,30 @@ RULES:
             }
 
         # 8. OPEN Document / PDF / File Intent (Checked BEFORE generic open app)
-        has_file_open_verb = any(v in text_lower for v in ["open ", "khol ", "kholo ", "kholdo ", "khol do "])
-        if has_file_open_verb and any(ext in text_lower for ext in [".pdf", ".docx", ".txt", "dot pdf", "dot txt", "डॉट पीडीएफ", "पीडीएफ"]):
-            # Clean and extract filename
-            clean_file_query = re.sub(r'^(open|khol|kholo|kholdo|khol do)\s+', '', text_lower).strip()
-            clean_file_query = re.sub(r'\b(friday|फ्राइडे|please|kardo|kar do)\b', '', clean_file_query).strip()
-            clean_file_query = clean_file_query.replace("dot pdf", ".pdf").replace("डॉट पीडीएफ", ".pdf").replace("dot txt", ".txt").strip()
-            if not "." in clean_file_query:
-                clean_file_query += ".pdf"
+        # Matches: "open friday.pdf", "friday.pdf open", "friday.pdf kholo", "open resume.pdf", "pdf kholo"
+        has_file_open_verb = any(v in text_lower for v in ["open", "khol", "kholo", "kholdo", "khol do", "launch"])
+        has_doc_indicator = any(ext in text_lower for ext in [".pdf", ".docx", ".doc", ".txt", ".xlsx", ".csv", "pdf", "file", "document"])
+        if has_file_open_verb and has_doc_indicator:
+            clean_fname = text_lower
+            for v in ["open", "khol", "kholo", "kholdo", "khol do", "launch", "please", "kardo", "kar do", "the", "file", "document"]:
+                clean_fname = re.sub(rf'\b{re.escape(v)}\b', '', clean_fname)
+            clean_fname = clean_fname.strip()
             
-            clean_file_query = clean_file_query.strip()
-            if clean_file_query:
-                return {
-                    "action": "open_app",
-                    "params": {"file": clean_file_query},
-                    "spoken_reply": f"'{clean_file_query}' open kar rahi hoon." if is_hindi else f"Opening '{clean_file_query}'."
-                }
+            # If user said "friday.pdf" or "resume.pdf"
+            if clean_fname:
+                if not "." in clean_fname and "pdf" in text_lower:
+                    clean_fname = clean_fname.replace("pdf", "").strip() + ".pdf"
+                elif not "." in clean_fname:
+                    clean_fname = clean_fname + ".pdf"
+                
+                clean_fname = clean_fname.strip(" .")
+                if clean_fname:
+                    return {
+                        "action": "open_app",
+                        "params": {"file": clean_fname},
+                        "spoken_reply": f"'{clean_fname}' open kar rahi hoon." if is_hindi else f"Opening '{clean_fname}'."
+                    }
+
 
         # 9. OPEN App Intent (Requires explicit open verb or standalone app name)
         open_verbs = ["open", "launch", "start", "run", "khol", "kholo", "kholdo", "chalao", "khol do"]
@@ -589,6 +631,7 @@ RULES:
     def process_command(cls, user_text: str) -> dict:
         """Process command: execute actions or reply with direct, clean answers in Hindi/English."""
         text_lower = user_text.lower().strip()
+        is_hindi = any(w in text_lower for w in ["khol", "kholo", "kholdo", "chalao", "band", "kar", "kardo", "kaise", "kya", "batao", "sun", "sunao", "aawaz", "gaana", "badhao", "ghatao", "chamak", "jodo", "sath", "bajao", "dhundo", "roko", "khul"]) or bool(re.search(r'[\u0900-\u097F]', user_text))
 
         # Step 1: Filter Fillers / Random Chatter
         if cls._is_random_or_filler(text_lower):
@@ -597,6 +640,7 @@ RULES:
                 "action_executed": "none",
                 "result": {"ignored": True}
             }
+
 
         # Step 2: Instant Fuzzy / Intent Match (<1ms response time)
         matched_intent = cls._fuzzy_direct_match(text_lower)
