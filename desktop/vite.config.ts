@@ -10,6 +10,9 @@ export default defineConfig({
   server: {
     port: 3000,
     strictPort: true,
+    watch: {
+      ignored: ['**/src-tauri/**'],
+    },
   },
   // env variables starting with TAURI_ are exposed to webview
   envPrefix: ['VITE_', 'TAURI_'],
