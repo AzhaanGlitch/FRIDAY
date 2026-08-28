@@ -23,11 +23,18 @@ RULES:
    - If user speaks in English, reply in fluent English.
 4. OS Actions:
    - If user wants an OS action, output valid JSON: {"action": "<action_name>", "params": {...}, "spoken_reply": "<short reply to speak>"}
-   - Supported actions: open_app, close_app, open_url, set_volume, mute_sound, set_brightness, media_control, lock_screen, take_screenshot, terminate_system, coding_mode, tile_windows, tile_positions.
-   - For tile_windows: specify "apps": ["<app1>", "<app2>", ... up to 4 apps]
-   - For tile_positions (positional placement like "chrome left me, vs code top right me, terminal bottom right me"): specify "positions": {"left": "Google Chrome", "right": "...", "top_left": "...", "top_right": "Visual Studio Code", "bottom_left": "...", "bottom_right": "Terminal"}
+   - Supported actions: 
+     * Apps: open_app, close_app, coding_mode
+     * System: set_volume, mute_sound, set_brightness, lock_screen, take_screenshot, system_info, terminate_system
+     * Window Tiling: tile_windows, tile_positions
+     * Media & Spotify: media_control, spotify_play (params: {"query": "song name"})
+     * Web Search: open_url, browser_search (params: {"engine": "google"|"youtube"|"github", "query": "search query"})
+     * File Management: search_file (params: {"filename": "..."}), create_file (params: {"filename": "...", "content": "..."}), create_folder (params: {"folder_name": "..."}), recent_downloads
+     * Clipboard: clipboard_get, clipboard_set (params: {"text": "..."}), clipboard_transform (params: {"transformation": "upper"|"lower"|"title"|"strip"|"extract_urls"})
+     * Workflows: execute_workflow (params: {"workflow": "meeting_mode"|"focus_mode"|"clean_workspace"})
 5. If background noise or random talk, output EXACTLY: SILENT
 """
+
 
 
     @classmethod
@@ -88,7 +95,7 @@ RULES:
             "टर्मिनल": "Terminal", "सफारी": "Safari", "कैलकुलेटर": "Calculator"
         }
 
-        # 1. Termination (English & Hindi)
+        # 1. Termination & Memory Clear (English & Hindi)
         if any(w in text_lower for w in ["terminate the system", "terminate system", "shutdown system", "exit system", "system band kardo", "band kar do", "alvida friday", "terminate", "सिस्टम बंद"]):
             reply = "System band kar rahi hoon. Alvida sir." if is_hindi else "Terminating system. Goodbye sir."
             return {
@@ -96,6 +103,14 @@ RULES:
                 "params": {},
                 "spoken_reply": reply
             }
+
+        if any(w in text_lower for w in ["clear history", "clear memory", "delete history", "memory clear kardo", "history saaf kardo", "forget history"]):
+            return {
+                "action": "clear_history",
+                "params": {},
+                "spoken_reply": "Saari purani history aur memory clear kar di hai." if is_hindi else "Cleared all conversation history and memory."
+            }
+
 
         # 2. Positional Tiling Intent (e.g. "chrome left me dalo, vs code top right me, terminal bottom right me")
         has_pos_keyword = any(w in text_lower for w in [
@@ -162,7 +177,88 @@ RULES:
                         "spoken_reply": reply
                     }
 
-        # 4. Brightness Controls (English & Hindi)
+        # 4. Volume & Mute/Unmute Controls (English & Hindi)
+        if any(w in text_lower for w in ["volume", "sound", "aawaz", "awaaz", "mute", "unmute"]):
+            if any(w in text_lower for w in ["unmute", "chalu"]):
+                reply = "Aawaz chalu kar di." if is_hindi else "Unmuting system audio."
+                return {"action": "mute_sound", "params": {"mute": False}, "spoken_reply": reply}
+            if any(w in text_lower for w in ["mute", "chup", "silent"]):
+                reply = "Aawaz band kar di." if is_hindi else "Muting system audio."
+                return {"action": "mute_sound", "params": {"mute": True}, "spoken_reply": reply}
+            
+            numbers = re.findall(r'\d+', text_lower)
+            if numbers:
+                level = int(numbers[0])
+                reply = f"Volume {level} percent kar diya." if is_hindi else f"Setting volume to {level}%."
+                return {"action": "set_volume", "params": {"level": level}, "spoken_reply": reply}
+            elif "badhao" in text_lower or "increase" in text_lower:
+                return {"action": "set_volume", "params": {"level": 80}, "spoken_reply": "Volume badha diya." if is_hindi else "Increasing volume."}
+            elif "kam" in text_lower or "decrease" in text_lower:
+                return {"action": "set_volume", "params": {"level": 30}, "spoken_reply": "Volume kam kar diya." if is_hindi else "Decreasing volume."}
+
+
+        # 4. Multi-Step Chained Workflows
+        if any(w in text_lower for w in ["meeting mode", "meeting routine", "start meeting"]):
+            return {
+                "action": "execute_workflow",
+                "params": {"workflow": "meeting_mode"},
+                "spoken_reply": "Meeting mode activate kar diya. Mic mute aur meeting windows tile kar diye hain." if is_hindi else "Meeting mode activated. Mic muted and workspace prepared."
+            }
+
+        if any(w in text_lower for w in ["focus mode", "deep work", "study mode", "padhai mode"]):
+            return {
+                "action": "execute_workflow",
+                "params": {"workflow": "focus_mode"},
+                "spoken_reply": "Focus mode shuru ho gaya. Distractions band aur workspace ready hai." if is_hindi else "Focus mode initiated. Distractions closed and deep work workspace ready."
+            }
+
+        # 5. File Management (Checked before media/open verbs)
+        if any(text_lower.startswith(p) for p in ["search file", "find file", "file dhundo", "file search"]):
+            fname = re.sub(r'^(search file|find file|file dhundo|file search)\s*', '', text_lower).strip()
+            if fname:
+                return {
+                    "action": "search_file",
+                    "params": {"filename": fname},
+                    "spoken_reply": f"'{fname}' file search kar rahi hoon." if is_hindi else f"Searching for file '{fname}'."
+                }
+
+        if any(w in text_lower for w in ["recent downloads", "latest downloads", "downloads dikhao"]):
+            return {
+                "action": "recent_downloads",
+                "params": {"count": 5},
+                "spoken_reply": "Recent downloads list kar rahi hoon." if is_hindi else "Listing recent downloads."
+            }
+
+        # 6. Deep App Playback & Search (Spotify, YouTube, Google)
+        if any(text_lower.startswith(p) for p in ["play ", "spotify play ", "spotify par bajao ", "gaana bajao "]):
+            song_name = re.sub(r'^(play|spotify play|spotify par bajao|gaana bajao)\s+', '', text_lower).strip()
+            song_name = re.sub(r'\b(on spotify|spotify par)\b', '', song_name).strip()
+            if song_name and song_name not in ["music", "song", "video"]:
+                return {
+                    "action": "spotify_play",
+                    "params": {"query": song_name},
+                    "spoken_reply": f"Spotify par '{song_name}' play kar rahi hoon." if is_hindi else f"Playing '{song_name}' on Spotify."
+                }
+
+        if "search on youtube" in text_lower or "youtube par search" in text_lower or text_lower.startswith("youtube search "):
+            query = re.sub(r'.*(search on youtube|youtube par search|youtube search)\s*', '', text_lower).strip()
+            if query:
+                return {
+                    "action": "browser_search",
+                    "params": {"engine": "youtube", "query": query},
+                    "spoken_reply": f"YouTube par '{query}' search kar rahi hoon." if is_hindi else f"Searching for '{query}' on YouTube."
+                }
+
+        if "search on google" in text_lower or "google search" in text_lower or text_lower.startswith("google search "):
+            query = re.sub(r'.*(search on google|google search)\s*', '', text_lower).strip()
+            if query:
+                return {
+                    "action": "browser_search",
+                    "params": {"engine": "google", "query": query},
+                    "spoken_reply": f"Google par '{query}' search kar rahi hoon." if is_hindi else f"Searching for '{query}' on Google."
+                }
+
+        # 7. Brightness Controls (English & Hindi)
         if any(w in text_lower for w in ["brightness", "riteness", "chamak", "screen light", "light"]):
             numbers = re.findall(r'\d+', text_lower)
             if numbers:
@@ -185,8 +281,8 @@ RULES:
                 "spoken_reply": reply
             }
 
-        # 5. OPEN App Intent (Requires explicit open verb or standalone app name)
-        open_verbs = ["open", "launch", "start", "run", "play", "khol", "kholo", "kholdo", "chalao", "khol do"]
+        # 8. OPEN App Intent (Requires explicit open verb or standalone app name)
+        open_verbs = ["open", "launch", "start", "run", "khol", "kholo", "kholdo", "chalao", "khol do"]
         has_open_verb = any(v in text_lower for v in open_verbs)
         for app_key, app_val in app_map.items():
             if has_open_verb:
@@ -206,7 +302,7 @@ RULES:
                 }
 
 
-        # 6. Web URL Open
+        # 9. Web URL Open
         web_domains = {
             "youtube": "youtube.com",
             "google": "google.com",
@@ -222,13 +318,14 @@ RULES:
             "amazon": "amazon.com"
         }
         for site_key, domain in web_domains.items():
-            if site_key in text_lower:
+            if site_key in text_lower and not ("search on" in text_lower or "search" in text_lower):
                 reply = f"{site_key.capitalize()} browser mein khol rahi hoon." if is_hindi else f"Opening {site_key.capitalize()} in your browser."
                 return {
                     "action": "open_url",
                     "params": {"url": domain},
                     "spoken_reply": reply
                 }
+
 
         if "." in text_lower and any(w in text_lower for w in [".com", ".org", ".io", ".dev", ".ai", "http"]):
             words = text_lower.split()
@@ -298,7 +395,83 @@ RULES:
                 "spoken_reply": "Clipboard content padh rahi hoon." if is_hindi else "Reading clipboard content."
             }
 
+        if any(w in text_lower for w in ["make clipboard uppercase", "clipboard uppercase", "clipboard bada kardo", "uppercase clipboard"]):
+            return {
+                "action": "clipboard_transform",
+                "params": {"transformation": "upper"},
+                "spoken_reply": "Clipboard text uppercase kar diya." if is_hindi else "Converted clipboard text to uppercase."
+            }
+
+        if any(w in text_lower for w in ["make clipboard lowercase", "clipboard lowercase", "lowercase clipboard"]):
+            return {
+                "action": "clipboard_transform",
+                "params": {"transformation": "lower"},
+                "spoken_reply": "Clipboard text lowercase kar diya." if is_hindi else "Converted clipboard text to lowercase."
+            }
+
+        # 13. Deep App Playback & Search (Spotify, YouTube, Google)
+        if any(text_lower.startswith(p) for p in ["play ", "spotify play ", "spotify par bajao ", "gaana bajao "]):
+            song_name = re.sub(r'^(play|spotify play|spotify par bajao|gaana bajao)\s+', '', text_lower).strip()
+            song_name = re.sub(r'\b(on spotify|spotify par)\b', '', song_name).strip()
+            if song_name:
+                return {
+                    "action": "spotify_play",
+                    "params": {"query": song_name},
+                    "spoken_reply": f"Spotify par '{song_name}' play kar rahi hoon." if is_hindi else f"Playing '{song_name}' on Spotify."
+                }
+
+        if "search on youtube" in text_lower or "youtube par search" in text_lower:
+            query = re.sub(r'.*(search on youtube|youtube par search)\s*', '', text_lower).strip()
+            if query:
+                return {
+                    "action": "browser_search",
+                    "params": {"engine": "youtube", "query": query},
+                    "spoken_reply": f"YouTube par '{query}' search kar rahi hoon." if is_hindi else f"Searching for '{query}' on YouTube."
+                }
+
+        if "search on google" in text_lower or "google search" in text_lower:
+            query = re.sub(r'.*(search on google|google search|search)\s*', '', text_lower).strip()
+            if query:
+                return {
+                    "action": "browser_search",
+                    "params": {"engine": "google", "query": query},
+                    "spoken_reply": f"Google par '{query}' search kar rahi hoon." if is_hindi else f"Searching for '{query}' on Google."
+                }
+
+        # 14. Multi-Step Chained Workflows
+        if any(w in text_lower for w in ["meeting mode", "meeting routine", "start meeting"]):
+            return {
+                "action": "execute_workflow",
+                "params": {"workflow": "meeting_mode"},
+                "spoken_reply": "Meeting mode activate kar diya. Mic mute aur meeting windows tile kar diye hain." if is_hindi else "Meeting mode activated. Mic muted and workspace prepared."
+            }
+
+        if any(w in text_lower for w in ["focus mode", "deep work", "study mode", "padhai mode"]):
+            return {
+                "action": "execute_workflow",
+                "params": {"workflow": "focus_mode"},
+                "spoken_reply": "Focus mode shuru ho gaya. Distractions band aur workspace ready hai." if is_hindi else "Focus mode initiated. Distractions closed and deep work workspace ready."
+            }
+
+        # 15. File Management
+        if any(text_lower.startswith(p) for p in ["search file", "find file", "file dhundo", "file search"]):
+            fname = re.sub(r'^(search file|find file|file dhundo|file search)\s*', '', text_lower).strip()
+            if fname:
+                return {
+                    "action": "search_file",
+                    "params": {"filename": fname},
+                    "spoken_reply": f"'{fname}' file search kar rahi hoon." if is_hindi else f"Searching for file '{fname}'."
+                }
+
+        if any(w in text_lower for w in ["recent downloads", "latest downloads", "downloads dikhao"]):
+            return {
+                "action": "recent_downloads",
+                "params": {"count": 5},
+                "spoken_reply": "Recent downloads list kar rahi hoon." if is_hindi else "Listing recent downloads."
+            }
+
         return None
+
 
 
     @classmethod
@@ -394,6 +567,7 @@ RULES:
             return {
                 "text_response": spoken_reply,
                 "action_executed": action,
+                "parsed_params": params,
                 "result": action_res
             }
 
@@ -405,6 +579,7 @@ RULES:
             return {
                 "text_response": "",
                 "action_executed": "none",
+                "parsed_params": {},
                 "result": {"ignored": True}
             }
 
@@ -427,6 +602,7 @@ RULES:
                 return {
                     "text_response": spoken,
                     "action_executed": action,
+                    "parsed_params": params,
                     "result": action_res
                 }
             except Exception:
@@ -439,5 +615,7 @@ RULES:
         return {
             "text_response": llm_response,
             "action_executed": "none",
+            "parsed_params": {},
             "result": {}
         }
+
