@@ -45,12 +45,45 @@ class WakeWordDetector:
 
 
 
+    _working_device = None
+
+    @classmethod
+    def _get_input_device(cls):
+        """Find the most stable audio input device on Windows/macOS/Linux."""
+        if cls._working_device is not None:
+            return cls._working_device
+
+        try:
+            # Check default first
+            sd.check_input_settings(channels=1, samplerate=cls.SAMPLE_RATE, dtype='int16')
+            cls._working_device = None  # Use system default
+            return None
+        except Exception:
+            pass
+
+        # Try DirectSound or MME devices
+        try:
+            devices = sd.query_devices()
+            for idx, dev in enumerate(devices):
+                if dev['max_input_channels'] > 0:
+                    try:
+                        sd.check_input_settings(device=idx, channels=1, samplerate=cls.SAMPLE_RATE, dtype='int16')
+                        cls._working_device = idx
+                        return idx
+                    except Exception:
+                        continue
+        except Exception:
+            pass
+
+        return None
+
     @classmethod
     def _record_chunk(cls, duration: float = 1.3) -> tuple[str, bool]:
         """Record audio chunk with balanced speech energy gate."""
         try:
+            dev = cls._get_input_device()
             num_samples = int(duration * cls.SAMPLE_RATE)
-            audio_data = sd.rec(num_samples, samplerate=cls.SAMPLE_RATE, channels=1, dtype='int16')
+            audio_data = sd.rec(num_samples, samplerate=cls.SAMPLE_RATE, channels=1, dtype='int16', device=dev)
             sd.wait()
 
             # Balanced threshold: 140 RMS (rejects faint room sounds, breathes, echoes)
@@ -63,6 +96,8 @@ class WakeWordDetector:
             return (tmp.name, True)
         except Exception as e:
             print(f"[WakeWord Record Error]: {e}")
+            cls._working_device = None  # Reset to re-probe next time
+            time.sleep(1.0)
             return ("", False)
 
     @classmethod
