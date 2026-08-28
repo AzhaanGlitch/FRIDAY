@@ -99,9 +99,17 @@ class SystemAutomation:
             folder_name = params.get("folder_name", "New Folder")
             return FileManager.create_folder(folder_name)
 
+        elif intent == "organize_folder" or intent == "organize_downloads":
+            return FileManager.organize_downloads()
+
+        elif intent == "delete_file" or intent == "safe_delete":
+            filename = params.get("filename", "")
+            return FileManager.safe_delete_file(filename)
+
         elif intent == "recent_downloads":
             count = int(params.get("count", 5))
             return FileManager.read_recent_downloads(count)
+
 
         # 9. Advanced Clipboard
         elif intent == "clipboard_get":

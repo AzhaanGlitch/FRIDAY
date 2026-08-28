@@ -233,6 +233,22 @@ RULES:
                 "spoken_reply": f"Desktop par '{fname}' file bana di hai." if is_hindi else f"Created file '{fname}' on Desktop."
             }
 
+        if any(text_lower.startswith(p) for p in ["delete file ", "remove file ", "file delete kardo ", "file hatao "]):
+            fname = re.sub(r'^(delete file|remove file|file delete kardo|file hatao)\s*', '', text_lower).strip()
+            if fname:
+                return {
+                    "action": "delete_file",
+                    "params": {"filename": fname},
+                    "spoken_reply": f"'{fname}' ko safe trash me daal diya hai." if is_hindi else f"Safely moved '{fname}' to Trash."
+                }
+
+        if any(w in text_lower for w in ["organize downloads", "clean downloads", "downloads organize kardo", "organize my files"]):
+            return {
+                "action": "organize_downloads",
+                "params": {},
+                "spoken_reply": "Downloads folder ko categories me organize kar diya hai." if is_hindi else "Organized files in Downloads into categories."
+            }
+
         if any(text_lower.startswith(p) for p in ["search file", "find file", "file dhundo", "file search"]):
             fname = re.sub(r'^(search file|find file|file dhundo|file search)\s*', '', text_lower).strip()
             if fname:
@@ -248,6 +264,7 @@ RULES:
                 "params": {"count": 5},
                 "spoken_reply": "Recent downloads list kar rahi hoon." if is_hindi else "Listing recent downloads."
             }
+
 
 
         # 6. Deep App Playback & Search (Spotify, YouTube, Google)

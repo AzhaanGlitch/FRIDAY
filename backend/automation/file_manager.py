@@ -123,3 +123,74 @@ class FileManager:
             "success": True,
             "recent_files": files[:count]
         }
+
+    @classmethod
+    def organize_downloads(cls) -> dict:
+        """
+        Organize Downloads/Desktop folder by categories (Images, Documents, Audio, Videos, Archives, Code).
+        """
+        target_dir = os.path.join(str(Path.home()), "Downloads")
+        if not os.path.exists(target_dir):
+            return {"success": False, "error": "Downloads folder not found"}
+
+        categories = {
+            "Images": [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".heic"],
+            "Documents": [".pdf", ".docx", ".doc", ".txt", ".pptx", ".xlsx", ".csv"],
+            "Audio": [".mp3", ".wav", ".m4a", ".flac", ".aac"],
+            "Videos": [".mp4", ".mov", ".mkv", ".avi"],
+            "Archives": [".zip", ".tar", ".gz", ".rar", ".7z", ".dmg", ".pkg", ".exe", ".msi"],
+            "Code": [".py", ".js", ".ts", ".tsx", ".html", ".css", ".json", ".rs", ".cpp"]
+        }
+
+        moved_count = 0
+        for entry in os.scandir(target_dir):
+            if entry.is_file() and not entry.name.startswith("."):
+                _, ext = os.path.splitext(entry.name)
+                ext = ext.lower()
+                for cat_name, ext_list in categories.items():
+                    if ext in ext_list:
+                        cat_dir = os.path.join(target_dir, cat_name)
+                        os.makedirs(cat_dir, exist_ok=True)
+                        dest_path = os.path.join(cat_dir, entry.name)
+                        if not os.path.exists(dest_path):
+                            shutil.move(entry.path, dest_path)
+                            moved_count += 1
+                        break
+
+        return {
+            "success": True,
+            "message": f"Organized {moved_count} files in Downloads folder.",
+            "moved_count": moved_count
+        }
+
+    @classmethod
+    def safe_delete_file(cls, filename: str) -> dict:
+        """
+        Safe Delete Workflow (FRIDAY Blueprint Section 21):
+        Moves file to user's OS Trash/Recycle Bin instead of permanently deleting.
+        """
+        search_res = cls.search_files(filename, max_results=1)
+        if not search_res.get("files"):
+            return {"success": False, "error": f"File '{filename}' not found"}
+
+        target_file = search_res["files"][0]["path"]
+        try:
+            # Cross-platform safe move to Trash
+            if sys.platform == "darwin":
+                import subprocess
+                subprocess.run(["osascript", "-e", f'tell application "Finder" to delete POSIX file "{target_file}"'], check=True)
+            else:
+                # On Windows / Linux, move to a safety .Trash / safe backup location
+                trash_dir = os.path.join(str(Path.home()), ".friday_trash")
+                os.makedirs(trash_dir, exist_ok=True)
+                dest = os.path.join(trash_dir, os.path.basename(target_file))
+                shutil.move(target_file, dest)
+
+            return {
+                "success": True,
+                "message": f"Safely moved '{os.path.basename(target_file)}' to Trash.",
+                "path": target_file
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
