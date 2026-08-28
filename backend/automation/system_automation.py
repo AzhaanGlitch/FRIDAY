@@ -17,12 +17,34 @@ class SystemAutomation:
         is_mac = sys.platform == "darwin"
         is_win = sys.platform == "win32"
 
-        # 1. Application Launch & Close
-        if intent == "open_app":
+        # 1. Application & File Launch & Close
+        if intent == "open_app" or intent == "open_file":
+            # If user wants to open a document/PDF file (e.g. "file": "Friday.pdf" or app_name has .pdf / .docx)
+            target_file = params.get("file") or params.get("filename") or params.get("document") or ""
             app_name = params.get("app_name") or params.get("app") or params.get("name") or params.get("application") or ""
+            
+            if any(ext in app_name.lower() for ext in [".pdf", ".docx", ".doc", ".txt", ".xlsx", ".csv", ".png", ".jpg"]):
+                target_file = app_name
+                app_name = ""
+
+            if target_file:
+                search_res = FileManager.search_files(target_file, max_results=1)
+                if search_res.get("files"):
+                    full_path = search_res["files"][0]["path"]
+                    try:
+                        import subprocess
+                        if is_mac:
+                            subprocess.run(["open", full_path], timeout=3)
+                        elif is_win:
+                            subprocess.run(["cmd", "/c", f'start "" "{full_path}"'], timeout=3)
+                        return {"success": True, "message": f"Opened file {full_path}", "path": full_path}
+                    except Exception as e:
+                        return {"success": False, "error": str(e)}
+
             return MacAutomation.open_application(app_name) if is_mac else WinAutomation.open_application(app_name) if is_win else {"success": False, "error": f"Unsupported platform: {sys.platform}"}
 
         elif intent == "close_app":
+
             app_name = params.get("app_name") or params.get("app") or params.get("name") or params.get("application") or ""
             return MacAutomation.close_application(app_name) if is_mac else WinAutomation.close_application(app_name) if is_win else {"success": False, "error": f"Unsupported platform: {sys.platform}"}
 
