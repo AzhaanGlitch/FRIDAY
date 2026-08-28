@@ -282,8 +282,24 @@ RULES:
                 "spoken_reply": "Coding mode shuru kar diya hai. VS Code left me, Terminal top right me, aur GitHub bottom right me tile kar diye hain." if is_hindi else "Coding mode initiated. VS Code on left, Terminal top-right, and GitHub bottom-right tiled."
             }
 
+        # 12. Clipboard operations
+        if text_lower.startswith("copy ") or text_lower.startswith("clipboard copy "):
+            clip_text = text_lower.split(" ", 1)[1].strip() if " " in text_lower else ""
+            return {
+                "action": "clipboard_set",
+                "params": {"text": clip_text},
+                "spoken_reply": f"'{clip_text}' clipboard par copy kar diya." if is_hindi else f"Copied '{clip_text}' to clipboard."
+            }
+
+        if any(w in text_lower for w in ["read clipboard", "clipboard read", "what is on clipboard", "paste", "clipboard par kya hai"]):
+            return {
+                "action": "clipboard_get",
+                "params": {},
+                "spoken_reply": "Clipboard content padh rahi hoon." if is_hindi else "Reading clipboard content."
+            }
 
         return None
+
 
     @classmethod
     def _call_groq_with_fallbacks(cls, user_text: str) -> str:

@@ -74,6 +74,8 @@ class SystemAutomation:
             return MacAutomation.take_screenshot() if is_mac else WinAutomation.take_screenshot() if is_win else {"success": False, "error": f"Unsupported platform: {sys.platform}"}
 
         elif intent == "system_info":
-            return MacAutomation.get_system_info() if is_mac else {"success": True, "info": {"platform": sys.platform}}
+            from backend.automation.system_monitor import SystemMonitor
+            return SystemMonitor.get_metrics()
 
         return {"success": False, "error": f"Unknown automation intent: {intent}"}
+
