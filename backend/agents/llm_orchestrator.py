@@ -66,11 +66,15 @@ RULES:
             "क्लोज": "close", "बंद करो": "close", "बंद": "close", "हटाओ": "close", "क्विट": "close",
             "प्ले": "play", "बजाओ": "play", "चलाओ": "play", "गाना": "play", "पॉज": "pause", "रोको": "pause",
             "ढूंढो": "search_file", "सर्च": "search", "खोजो": "search", "ढूंढ": "search_file",
+            "फोल्डर बनाओ": "create folder", "फ़ोल्डर बनाओ": "create folder", "फोल्डर": "folder", "फ़ोल्डर": "folder",
+            "फाइल बनाओ": "create file", "फ़ाइल बनाओ": "create file", "फाइल": "file", "फ़ाइल": "file",
+            "बनाओ": "create", "बना दो": "create",
             "डॉट": ".", "पीडीएफ": "pdf", "डॉक": "docx", "टेक्स्ट": "txt",
             "फ्राइडे": "friday", "फ्राईडे": "friday", "फ़्राइडे": "friday",
             "स्पॉटिफाई": "spotify", "स्पोटिफाई": "spotify", "क्रोम": "chrome", "गूगल क्रोम": "chrome",
             "यूट्यूब": "youtube", "गूगल": "google", "टर्मिनल": "terminal", "सफारी": "safari", "कैलकुलेटर": "calculator"
         }
+
         for k, v in devanagari_replacements.items():
             t = t.replace(k, v)
 
@@ -238,18 +242,22 @@ RULES:
             }
 
         # 5. File & Folder Management (Checked before media/open verbs)
-        if any(text_lower.startswith(p) for p in ["create folder ", "make folder ", "folder banao ", "naya folder banao "]):
-            folder_name = re.sub(r'^(create folder|make folder|folder banao|naya folder banao)\s*', '', text_lower).strip()
-            folder_name = folder_name.replace("named", "").replace("naam se", "").strip() or "New Folder"
+        if "create folder" in text_lower or any(w in text_lower for w in ["make folder", "folder banao", "naya folder banao", "folder create"]):
+            folder_name = text_lower
+            for w in ["create folder", "make folder", "folder banao", "naya folder banao", "folder create", "create", "banao", "folder", "named", "naam se", "please", "kardo", "kar do", "friday"]:
+                folder_name = re.sub(rf'\b{re.escape(w)}\b', '', folder_name)
+            folder_name = folder_name.strip() or "New Folder"
             return {
                 "action": "create_folder",
                 "params": {"folder_name": folder_name},
                 "spoken_reply": f"Desktop par '{folder_name}' folder bana diya hai." if is_hindi else f"Created folder '{folder_name}' on Desktop."
             }
 
-        if any(text_lower.startswith(p) for p in ["create file ", "make file ", "file banao ", "naya file banao "]):
-            fname = re.sub(r'^(create file|make file|file banao|naya file banao)\s*', '', text_lower).strip()
-            fname = fname.replace("named", "").replace("naam se", "").strip() or "new_file.txt"
+        if "create file" in text_lower or any(w in text_lower for w in ["make file", "file banao", "naya file banao", "file create"]):
+            fname = text_lower
+            for w in ["create file", "make file", "file banao", "naya file banao", "file create", "create", "banao", "file", "named", "naam se", "please", "kardo", "kar do", "friday"]:
+                fname = re.sub(rf'\b{re.escape(w)}\b', '', fname)
+            fname = fname.strip() or "new_file.txt"
             if not "." in fname:
                 fname += ".txt"
             return {
@@ -257,6 +265,7 @@ RULES:
                 "params": {"filename": fname, "content": ""},
                 "spoken_reply": f"Desktop par '{fname}' file bana di hai." if is_hindi else f"Created file '{fname}' on Desktop."
             }
+
 
         if any(text_lower.startswith(p) for p in ["delete file ", "remove file ", "file delete kardo ", "file hatao "]):
             fname = re.sub(r'^(delete file|remove file|file delete kardo|file hatao)\s*', '', text_lower).strip()
