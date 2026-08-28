@@ -23,20 +23,44 @@ class SpotifyController:
         else:
             WinAutomation.open_application("Spotify")
 
-        # 2. Open Spotify Search URI
+        # 2. Open Spotify Search URI and immediately trigger play
         spotify_uri = f"spotify:search:{encoded_query}"
         try:
             if is_mac:
-                subprocess.run(["open", spotify_uri], timeout=3)
+                # Open Spotify search URI and press Enter to start playing top result
+                script = f'''
+                tell application "Spotify"
+                    activate
+                    open location "{spotify_uri}"
+                    delay 0.8
+                    tell application "System Events"
+                        tell process "Spotify"
+                            key code 36
+                        end tell
+                    end tell
+                end tell
+                '''
+                MacAutomation.run_applescript(script)
             elif is_win:
                 subprocess.run(["cmd", "/c", f"start {spotify_uri}"], timeout=3)
+                time.sleep(1.0)
+                # On Windows, send Enter to play top searched song
+                ps_script = '''
+                $wshell = New-Object -ComObject wscript.shell;
+                $wshell.AppActivate('Spotify');
+                Start-Sleep -Milliseconds 600;
+                $wshell.SendKeys('{ENTER}')
+                '''
+                subprocess.run(["powershell", "-c", ps_script], timeout=3)
+
             return {
                 "success": True,
                 "query": query,
-                "message": f"Searching and playing '{query}' on Spotify"
+                "message": f"Playing '{query}' on Spotify"
             }
         except Exception as e:
             return {"success": False, "error": str(e)}
+
 
     @classmethod
     def control(cls, action: str) -> dict:
