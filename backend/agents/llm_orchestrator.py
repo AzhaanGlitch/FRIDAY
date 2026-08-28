@@ -319,7 +319,25 @@ RULES:
                 "spoken_reply": reply
             }
 
-        # 8. OPEN App Intent (Requires explicit open verb or standalone app name)
+        # 8. OPEN Document / PDF / File Intent (Checked BEFORE generic open app)
+        has_file_open_verb = any(v in text_lower for v in ["open ", "khol ", "kholo ", "kholdo ", "khol do "])
+        if has_file_open_verb and any(ext in text_lower for ext in [".pdf", ".docx", ".txt", "dot pdf", "dot txt", "डॉट पीडीएफ", "पीडीएफ"]):
+            # Clean and extract filename
+            clean_file_query = re.sub(r'^(open|khol|kholo|kholdo|khol do)\s+', '', text_lower).strip()
+            clean_file_query = re.sub(r'\b(friday|फ्राइडे|please|kardo|kar do)\b', '', clean_file_query).strip()
+            clean_file_query = clean_file_query.replace("dot pdf", ".pdf").replace("डॉट पीडीएफ", ".pdf").replace("dot txt", ".txt").strip()
+            if not "." in clean_file_query:
+                clean_file_query += ".pdf"
+            
+            clean_file_query = clean_file_query.strip()
+            if clean_file_query:
+                return {
+                    "action": "open_app",
+                    "params": {"file": clean_file_query},
+                    "spoken_reply": f"'{clean_file_query}' open kar rahi hoon." if is_hindi else f"Opening '{clean_file_query}'."
+                }
+
+        # 9. OPEN App Intent (Requires explicit open verb or standalone app name)
         open_verbs = ["open", "launch", "start", "run", "khol", "kholo", "kholdo", "chalao", "khol do"]
         has_open_verb = any(v in text_lower for v in open_verbs)
         for app_key, app_val in app_map.items():
@@ -338,6 +356,7 @@ RULES:
                     "params": {"app_name": app_val},
                     "spoken_reply": reply
                 }
+
 
 
         # 9. Web URL Open
