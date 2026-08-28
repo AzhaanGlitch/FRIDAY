@@ -212,7 +212,27 @@ RULES:
                 "spoken_reply": "Focus mode shuru ho gaya. Distractions band aur workspace ready hai." if is_hindi else "Focus mode initiated. Distractions closed and deep work workspace ready."
             }
 
-        # 5. File Management (Checked before media/open verbs)
+        # 5. File & Folder Management (Checked before media/open verbs)
+        if any(text_lower.startswith(p) for p in ["create folder ", "make folder ", "folder banao ", "naya folder banao "]):
+            folder_name = re.sub(r'^(create folder|make folder|folder banao|naya folder banao)\s*', '', text_lower).strip()
+            folder_name = folder_name.replace("named", "").replace("naam se", "").strip() or "New Folder"
+            return {
+                "action": "create_folder",
+                "params": {"folder_name": folder_name},
+                "spoken_reply": f"Desktop par '{folder_name}' folder bana diya hai." if is_hindi else f"Created folder '{folder_name}' on Desktop."
+            }
+
+        if any(text_lower.startswith(p) for p in ["create file ", "make file ", "file banao ", "naya file banao "]):
+            fname = re.sub(r'^(create file|make file|file banao|naya file banao)\s*', '', text_lower).strip()
+            fname = fname.replace("named", "").replace("naam se", "").strip() or "new_file.txt"
+            if not "." in fname:
+                fname += ".txt"
+            return {
+                "action": "create_file",
+                "params": {"filename": fname, "content": ""},
+                "spoken_reply": f"Desktop par '{fname}' file bana di hai." if is_hindi else f"Created file '{fname}' on Desktop."
+            }
+
         if any(text_lower.startswith(p) for p in ["search file", "find file", "file dhundo", "file search"]):
             fname = re.sub(r'^(search file|find file|file dhundo|file search)\s*', '', text_lower).strip()
             if fname:
@@ -228,6 +248,7 @@ RULES:
                 "params": {"count": 5},
                 "spoken_reply": "Recent downloads list kar rahi hoon." if is_hindi else "Listing recent downloads."
             }
+
 
         # 6. Deep App Playback & Search (Spotify, YouTube, Google)
         if any(text_lower.startswith(p) for p in ["play ", "spotify play ", "spotify par bajao ", "gaana bajao "]):
