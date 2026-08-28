@@ -66,14 +66,17 @@ RULES:
             "क्लोज": "close", "बंद करो": "close", "बंद": "close", "हटाओ": "close", "क्विट": "close",
             "प्ले": "play", "बजाओ": "play", "चलाओ": "play", "गाना": "play", "पॉज": "pause", "रोको": "pause",
             "ढूंढो": "search_file", "सर्च": "search", "खोजो": "search", "ढूंढ": "search_file",
-            "फोल्डर बनाओ": "create folder", "फ़ोल्डर बनाओ": "create folder", "फोल्डर": "folder", "फ़ोल्डर": "folder",
+            "क्रिएट फोल्डर": "create folder", "क्रिएट फ़ोल्डर": "create folder",
+            "फोल्डर बनाओ": "create folder", "फ़ोल्डर बनाओ": "create folder", "फोल्डर": "folder", "फ़ोल्डर": "folder", "शोल्डर": "folder",
+            "क्रिएट फाइल": "create file", "क्रिएट फ़ाइल": "create file",
             "फाइल बनाओ": "create file", "फ़ाइल बनाओ": "create file", "फाइल": "file", "फ़ाइल": "file",
-            "बनाओ": "create", "बना दो": "create",
+            "क्रिएट": "create", "बनाओ": "create", "बना दो": "create", "न्यू": "new", "नया": "new",
             "डॉट": ".", "पीडीएफ": "pdf", "डॉक": "docx", "टेक्स्ट": "txt",
             "फ्राइडे": "friday", "फ्राईडे": "friday", "फ़्राइडे": "friday",
             "स्पॉटिफाई": "spotify", "स्पोटिफाई": "spotify", "क्रोम": "chrome", "गूगल क्रोम": "chrome",
             "यूट्यूब": "youtube", "गूगल": "google", "टर्मिनल": "terminal", "सफारी": "safari", "कैलकुलेटर": "calculator"
         }
+
 
         for k, v in devanagari_replacements.items():
             t = t.replace(k, v)
