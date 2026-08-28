@@ -27,7 +27,7 @@ class SpotifyController:
         spotify_uri = f"spotify:search:{encoded_query}"
         try:
             if is_mac:
-                # Open Spotify search URI, navigate down to top result & press play
+                # Open Spotify search URI, navigate down to top result & press Enter to play
                 script = f'''
                 tell application "Spotify"
                     activate
@@ -35,12 +35,10 @@ class SpotifyController:
                     delay 1.0
                     tell application "System Events"
                         key code 36 -- Enter search
-                        delay 0.3
+                        delay 0.4
                         key code 48 -- Tab into results
-                        delay 0.2
-                        key code 36 -- Enter on first result
-                        delay 0.2
-                        key code 49 -- Spacebar play
+                        delay 0.3
+                        key code 36 -- Enter on first result (Plays song)
                     end tell
                 end tell
                 '''
@@ -48,7 +46,7 @@ class SpotifyController:
             elif is_win:
                 subprocess.run(["cmd", "/c", f"start {spotify_uri}"], timeout=3)
                 time.sleep(1.0)
-                # On Windows, send Enter and Space to play top searched song
+                # On Windows, send Enter and Tab -> Enter to play top searched song
                 ps_script = '''
                 $wshell = New-Object -ComObject wscript.shell;
                 $wshell.AppActivate('Spotify');
@@ -58,10 +56,9 @@ class SpotifyController:
                 $wshell.SendKeys('{TAB}');
                 Start-Sleep -Milliseconds 300;
                 $wshell.SendKeys('{ENTER}');
-                Start-Sleep -Milliseconds 200;
-                $wshell.SendKeys(' ');
                 '''
                 subprocess.run(["powershell", "-c", ps_script], timeout=3)
+
 
 
             return {
