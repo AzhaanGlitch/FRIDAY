@@ -75,9 +75,12 @@ RULES:
             "फ्राइडे": "friday", "फ्राईडे": "friday", "फ़्राइडे": "friday",
             "स्पॉटिफाई": "spotify", "स्पोटिफाई": "spotify", "क्रोम": "chrome", "गूगल क्रोम": "chrome",
             "यूट्यूब": "youtube", "गूगल": "google", "टर्मिनल": "terminal", "सफारी": "safari", "कैलकुलेटर": "calculator",
+            # Common English songs transcribed to Devanagari
+            "बैक इन ब्लैक": "back in black", "बैक टू ब्लैक": "back to black",
             # Devanagari Hindi connectors & music fillers
-            "के गाने": "", "के गाना": "", "के गीत": "", "के सांग्स": "", "के सांग": "", "के सोंग्स": "", "के सोंग": "",
-            "के द्वारा": "", "पर": "", "पे": "", "में": "", "को": "", "का": "", "के": "", "की": ""
+            "ऑन स्पॉटिफाई": " ", "ऑन": " ",
+            "के गाने": " ", "के गाना": " ", "के गीत": " ", "के सांग्स": " ", "के सांग": " ", "के सोंग्स": " ", "के सोंग": " ",
+            "के द्वारा": " ", "पर": " ", "पे": " ", "में": " ", "को": " ", "का": " ", "के": " ", "की": " "
         }
 
 
@@ -328,7 +331,7 @@ RULES:
                 "gaana bajao", "gana bajao", "gaane bajao", "gane bajao", "gana chalao", "gane chalao", "gaana chalao", "gaane chalao",
                 "chalao", "chalo", "bajao", "sunao", "play", "playing",
                 "gaana", "gaane", "gana", "gane", "geet", "song", "songs", "music", "track",
-                "spotify", "friday", "please", "kardo", "kar do", "karo", "ko", "par", "pe", "mein"
+                "on", "the", "youtube", "spotify", "friday", "please", "kardo", "kar do", "karo", "ko", "par", "pe", "mein"
             ]
             for p in filler_phrases:
                 song_name = re.sub(rf'\b{re.escape(p)}\b', ' ', song_name)

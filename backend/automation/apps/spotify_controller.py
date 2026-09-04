@@ -12,8 +12,25 @@ class SpotifyController:
 
     @classmethod
     def search_and_play(cls, query: str) -> dict:
-        """Search Spotify and trigger playback directly via Spotify URI / deep-link."""
-        encoded_query = urllib.parse.quote(query.strip())
+        # Resolve exact song and artist to guarantee Top Result matches a track (not podcast or repeat button)
+        search_term = query.strip()
+        try:
+            import urllib.request
+            import json
+            meta_url = f"https://itunes.apple.com/search?term={urllib.parse.quote(search_term)}&entity=song&limit=1"
+            req = urllib.request.Request(meta_url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=2.5) as resp:
+                data = json.loads(resp.read().decode())
+                if data.get("results"):
+                    item = data["results"][0]
+                    t_name = item.get("trackName")
+                    a_name = item.get("artistName")
+                    if t_name and a_name:
+                        search_term = f"{t_name} {a_name}"
+        except Exception:
+            pass
+
+        encoded_query = urllib.parse.quote(search_term)
         is_mac = sys.platform == "darwin"
         is_win = sys.platform == "win32"
 
@@ -27,20 +44,35 @@ class SpotifyController:
         spotify_uri = f"spotify:search:{encoded_query}"
         try:
             if is_mac:
-                # Open Spotify search URI, navigate into results, press Return and explicitly verify play state
+                # Keystroke sequence:
+                # 1. Escape (closes any open queue, flyout, or side panel)
+                # 2. Cmd+F (explicitly focuses search field)
+                # 3. Enter (commits search)
+                # 4. Tab 1 & Tab 2 (navigates into top result track row)
+                # 5. Enter (triggers track playback directly)
                 script = f'''
                 tell application "Spotify"
                     activate
                     open location "{spotify_uri}"
-                    delay 1.0
-                    tell application "System Events"
-                        key code 36 -- Enter search
-                        delay 0.5
-                        key code 48 -- Tab into results
+                end tell
+                delay 1.0
+                tell application "System Events"
+                    tell process "Spotify"
+                        key code 53 -- Escape
                         delay 0.3
-                        key code 36 -- Enter on first result (Plays song)
+                        keystroke "f" using command down -- Focus search
+                        delay 0.3
+                        key code 36 -- Enter
+                        delay 0.5
+                        key code 48 -- Tab 1
+                        delay 0.2
+                        key code 48 -- Tab 2
+                        delay 0.2
+                        key code 36 -- Enter on track
                     end tell
-                    delay 0.4
+                end tell
+                delay 0.5
+                tell application "Spotify"
                     if player state is not playing then
                         play
                     end if
