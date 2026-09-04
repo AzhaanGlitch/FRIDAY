@@ -205,6 +205,10 @@ RULES:
 
         # 3. CLOSE App Intent (Checked BEFORE Open)
         is_close_intent = any(w in text_lower for w in ["close", "quit", "exit", "kill", "stop", "band", "hatao", "closing"])
+        # If user is asking to pause/stop playback (e.g. "stop music", "stop song", "stop playback")
+        if any(w in text_lower for w in ["stop music", "stop song", "stop playback", "music stop", "song stop", "gaana stop"]):
+            return {"action": "media_control", "params": {"action": "pause"}, "spoken_reply": "Gaana rok diya." if is_hindi else "Paused playback."}
+
         if is_close_intent:
             for app_key, app_val in app_map.items():
                 if app_key in text_lower:
@@ -314,14 +318,24 @@ RULES:
                 "spoken_reply": "Recent downloads list kar rahi hoon." if is_hindi else "Listing recent downloads."
             }
 
-        # 6. Deep App Playback & Search (Spotify, YouTube, Google)
+        # 6. Direct Media Playback Controls (Checked BEFORE Song Search)
+        # Matches: "pause", "pause the song", "pause music", "stop music", "gaana roko", "roko", "resume", "play music", "next song"
+        if any(w in text_lower for w in ["pause the song", "pause song", "pause music", "pause", "gaana roko", "gana roko", "roko", "music roko", "stop music", "stop song"]):
+            return {"action": "media_control", "params": {"action": "pause"}, "spoken_reply": "Gaana rok diya." if is_hindi else "Paused playback."}
+
+        if any(w in text_lower for w in ["next song", "next track", "skip song", "agla gaana", "next gaana", "change song"]):
+            return {"action": "media_control", "params": {"action": "next"}, "spoken_reply": "Agla gaana play kar rahi hoon." if is_hindi else "Skipping to next track."}
+
+        if any(w in text_lower for w in ["previous song", "previous track", "pichhla gaana"]):
+            return {"action": "media_control", "params": {"action": "previous"}, "spoken_reply": "Pichhla gaana play kar rahi hoon." if is_hindi else "Playing previous track."}
+
+        if text_lower in ["play", "play music", "resume", "resume music", "gaana chalao", "gaana bajao", "gana chalao", "gana bajao", "chalao", "chalo", "bajao", "sunao"]:
+            return {"action": "media_control", "params": {"action": "play"}, "spoken_reply": "Gaana shuru kar diya." if is_hindi else "Resumed playback."}
+
+        # 7. Deep App Playback & Search (Spotify, YouTube, Google)
         # Check explicit song playback (e.g. "karan aujla ke gane chalo", "play Despacito", "Arijit Singh bajao", "play Karan Aujla on spotify")
         play_keywords = ["play", "bajao", "chalao", "chalo", "sunao", "gaana", "gaane", "gana", "gane", "geet", "song", "songs", "spotify"]
         if any(w in text_lower for w in play_keywords):
-            # If it is a generic resume/play command with no song or artist
-            if text_lower in ["play", "play music", "resume", "resume music", "gaana chalao", "gaana bajao", "gana chalao", "gana bajao", "chalao", "chalo", "bajao", "sunao"]:
-                return {"action": "media_control", "params": {"action": "play"}, "spoken_reply": "Gaana shuru kar diya." if is_hindi else "Resumed playback."}
-
             song_name = text_lower
             filler_phrases = [
                 "spotify play", "spotify par bajao", "spotify par play", "spotify pe play", "spotify pe bajao",
@@ -486,13 +500,7 @@ RULES:
             elif "kam" in text_lower or "decrease" in text_lower:
                 return {"action": "set_volume", "params": {"level": 30}, "spoken_reply": "Volume kam kar diya." if is_hindi else "Decreasing volume."}
 
-        # 8. Media Playback
-        if any(w in text_lower for w in ["pause music", "pause song", "pause", "gaana roko", "roko"]):
-            return {"action": "media_control", "params": {"action": "pause"}, "spoken_reply": "Gaana rok diya." if is_hindi else "Paused playback."}
-        if any(w in text_lower for w in ["play music", "resume music", "play song", "resume", "gaana chalao", "chalao"]):
-            return {"action": "media_control", "params": {"action": "play"}, "spoken_reply": "Gaana shuru kar diya." if is_hindi else "Resumed playback."}
-        if any(w in text_lower for w in ["next song", "next track", "skip song", "agla gaana", "next gaana"]):
-            return {"action": "media_control", "params": {"action": "next"}, "spoken_reply": "Agla gaana play kar rahi hoon." if is_hindi else "Skipping to next track."}
+
 
         # 9. Screenshot
         if any(w in text_lower for w in ["screenshot", "screen capture", "screenshot lelo"]):
