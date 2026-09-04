@@ -74,7 +74,10 @@ RULES:
             "डॉट": ".", "पीडीएफ": "pdf", "डॉक": "docx", "टेक्स्ट": "txt",
             "फ्राइडे": "friday", "फ्राईडे": "friday", "फ़्राइडे": "friday",
             "स्पॉटिफाई": "spotify", "स्पोटिफाई": "spotify", "क्रोम": "chrome", "गूगल क्रोम": "chrome",
-            "यूट्यूब": "youtube", "गूगल": "google", "टर्मिनल": "terminal", "सफारी": "safari", "कैलकुलेटर": "calculator"
+            "यूट्यूब": "youtube", "गूगल": "google", "टर्मिनल": "terminal", "सफारी": "safari", "कैलकुलेटर": "calculator",
+            # Devanagari Hindi connectors & music fillers
+            "के गाने": "", "के गाना": "", "के गीत": "", "के सांग्स": "", "के सांग": "", "के सोंग्स": "", "के सोंग": "",
+            "के द्वारा": "", "पर": "", "पे": "", "में": "", "को": "", "का": "", "के": "", "की": ""
         }
 
 
@@ -309,20 +312,34 @@ RULES:
             }
 
         # 6. Deep App Playback & Search (Spotify, YouTube, Google)
-        # Check explicit song playback (e.g. "play Despacito", "Arijit Singh play", "Arijit Singh bajao", "play Arijit Singh")
-        if any(w in text_lower for w in ["play", "bajao", "spotify play", "spotify par bajao", "gaana"]):
+        # Check explicit song playback (e.g. "karan aujla ke gane chalo", "play Despacito", "Arijit Singh bajao", "play Karan Aujla on spotify")
+        play_keywords = ["play", "bajao", "chalao", "chalo", "sunao", "gaana", "gaane", "gana", "gane", "geet", "song", "songs", "spotify"]
+        if any(w in text_lower for w in play_keywords):
+            # If it is a generic resume/play command with no song or artist
+            if text_lower in ["play", "play music", "resume", "resume music", "gaana chalao", "gaana bajao", "gana chalao", "gana bajao", "chalao", "chalo", "bajao", "sunao"]:
+                return {"action": "media_control", "params": {"action": "play"}, "spoken_reply": "Gaana shuru kar diya." if is_hindi else "Resumed playback."}
+
             song_name = text_lower
-            for w in ["spotify play", "spotify par bajao", "gaana bajao", "play", "bajao", "chalao", "on spotify", "spotify par", "spotify", "friday", "please"]:
-                song_name = re.sub(rf'\b{re.escape(w)}\b', '', song_name)
-            song_name = song_name.strip()
-            if song_name and song_name not in ["music", "song", "video", ""]:
+            filler_phrases = [
+                "spotify play", "spotify par bajao", "spotify par play", "spotify pe play", "spotify pe bajao",
+                "spotify par chalao", "spotify pe chalao", "spotify pe", "spotify par", "on spotify",
+                "ke gane", "ke gaane", "ke gana", "ke geet", "ke songs", "ke song",
+                "ke dwara", "by", "ka gana", "ka gaana", "ka song",
+                "gaana bajao", "gana bajao", "gaane bajao", "gane bajao", "gana chalao", "gane chalao", "gaana chalao", "gaane chalao",
+                "chalao", "chalo", "bajao", "sunao", "play", "playing",
+                "gaana", "gaane", "gana", "gane", "geet", "song", "songs", "music", "track",
+                "spotify", "friday", "please", "kardo", "kar do", "karo", "ko", "par", "pe", "mein"
+            ]
+            for p in filler_phrases:
+                song_name = re.sub(rf'\b{re.escape(p)}\b', ' ', song_name)
+            song_name = re.sub(r'\s+', ' ', song_name).strip()
+
+            if song_name and song_name not in ["music", "song", "video", "track", "audio", ""]:
                 return {
                     "action": "spotify_play",
                     "params": {"query": song_name},
                     "spoken_reply": f"Spotify par '{song_name}' play kar rahi hoon." if is_hindi else f"Playing '{song_name}' on Spotify."
                 }
-
-
 
         if "search on youtube" in text_lower or "youtube par search" in text_lower or text_lower.startswith("youtube search "):
             query = re.sub(r'.*(search on youtube|youtube par search|youtube search)\s*', '', text_lower).strip()
@@ -520,66 +537,7 @@ RULES:
                 "spoken_reply": "Clipboard text lowercase kar diya." if is_hindi else "Converted clipboard text to lowercase."
             }
 
-        # 13. Deep App Playback & Search (Spotify, YouTube, Google)
-        if any(text_lower.startswith(p) for p in ["play ", "spotify play ", "spotify par bajao ", "gaana bajao "]):
-            song_name = re.sub(r'^(play|spotify play|spotify par bajao|gaana bajao)\s+', '', text_lower).strip()
-            song_name = re.sub(r'\b(on spotify|spotify par)\b', '', song_name).strip()
-            if song_name:
-                return {
-                    "action": "spotify_play",
-                    "params": {"query": song_name},
-                    "spoken_reply": f"Spotify par '{song_name}' play kar rahi hoon." if is_hindi else f"Playing '{song_name}' on Spotify."
-                }
 
-        if "search on youtube" in text_lower or "youtube par search" in text_lower:
-            query = re.sub(r'.*(search on youtube|youtube par search)\s*', '', text_lower).strip()
-            if query:
-                return {
-                    "action": "browser_search",
-                    "params": {"engine": "youtube", "query": query},
-                    "spoken_reply": f"YouTube par '{query}' search kar rahi hoon." if is_hindi else f"Searching for '{query}' on YouTube."
-                }
-
-        if "search on google" in text_lower or "google search" in text_lower:
-            query = re.sub(r'.*(search on google|google search|search)\s*', '', text_lower).strip()
-            if query:
-                return {
-                    "action": "browser_search",
-                    "params": {"engine": "google", "query": query},
-                    "spoken_reply": f"Google par '{query}' search kar rahi hoon." if is_hindi else f"Searching for '{query}' on Google."
-                }
-
-        # 14. Multi-Step Chained Workflows
-        if any(w in text_lower for w in ["meeting mode", "meeting routine", "start meeting"]):
-            return {
-                "action": "execute_workflow",
-                "params": {"workflow": "meeting_mode"},
-                "spoken_reply": "Meeting mode activate kar diya. Mic mute aur meeting windows tile kar diye hain." if is_hindi else "Meeting mode activated. Mic muted and workspace prepared."
-            }
-
-        if any(w in text_lower for w in ["focus mode", "deep work", "study mode", "padhai mode"]):
-            return {
-                "action": "execute_workflow",
-                "params": {"workflow": "focus_mode"},
-                "spoken_reply": "Focus mode shuru ho gaya. Distractions band aur workspace ready hai." if is_hindi else "Focus mode initiated. Distractions closed and deep work workspace ready."
-            }
-
-        # 15. File Management
-        if any(text_lower.startswith(p) for p in ["search file", "find file", "file dhundo", "file search"]):
-            fname = re.sub(r'^(search file|find file|file dhundo|file search)\s*', '', text_lower).strip()
-            if fname:
-                return {
-                    "action": "search_file",
-                    "params": {"filename": fname},
-                    "spoken_reply": f"'{fname}' file search kar rahi hoon." if is_hindi else f"Searching for file '{fname}'."
-                }
-
-        if any(w in text_lower for w in ["recent downloads", "latest downloads", "downloads dikhao"]):
-            return {
-                "action": "recent_downloads",
-                "params": {"count": 5},
-                "spoken_reply": "Recent downloads list kar rahi hoon." if is_hindi else "Listing recent downloads."
-            }
 
         return None
 

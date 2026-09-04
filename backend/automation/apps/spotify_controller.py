@@ -27,7 +27,7 @@ class SpotifyController:
         spotify_uri = f"spotify:search:{encoded_query}"
         try:
             if is_mac:
-                # Open Spotify search URI, navigate down to top result & press Enter to play
+                # Open Spotify search URI, navigate into results, press Return and explicitly verify play state
                 script = f'''
                 tell application "Spotify"
                     activate
@@ -35,16 +35,21 @@ class SpotifyController:
                     delay 1.0
                     tell application "System Events"
                         key code 36 -- Enter search
-                        delay 0.4
+                        delay 0.5
                         key code 48 -- Tab into results
                         delay 0.3
                         key code 36 -- Enter on first result (Plays song)
                     end tell
+                    delay 0.4
+                    if player state is not playing then
+                        play
+                    end if
                 end tell
                 '''
                 MacAutomation.run_applescript(script)
             elif is_win:
                 subprocess.run(["cmd", "/c", f"start {spotify_uri}"], timeout=3)
+                import time
                 time.sleep(1.0)
                 # On Windows, send Enter and Tab -> Enter to play top searched song
                 ps_script = '''
